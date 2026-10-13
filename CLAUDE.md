@@ -320,11 +320,11 @@ Julia LTS and the current release.
 - [x] **Phase 2 — First end-to-end run.** `GridArchive`, `GaussianMutation`,
       `VariationEmitter`, `QDProblem`, `Rastrigin`, `init`/`step!`/`solve`,
       `MAPElites()`. Example `examples/rastrigin.jl` fills an archive.
-- [ ] **Phase 3 — Guarantees.** Metrics, `Testing` submodule, conformance
+- [x] **Phase 3 — Guarantees.** Metrics, `Testing` submodule, conformance
       tests, inference and allocation tests, Aqua/ExplicitImports/JET.
-- [ ] **Phase 4 — Benchmarks.** BenchmarkTools suite; comparison with pyribs
+- [x] **Phase 4 — Benchmarks.** BenchmarkTools suite; comparison with pyribs
       on Rastrigin (same archive shape, batch size, evaluation budget).
-- [ ] **Phase 5 — Structured genotype.** `examples/graphs.jl` with a
+- [x] **Phase 5 — Structured genotype.** `examples/graphs.jl` with a
       Graphs.jl genotype, custom `vary`, descriptor from graph statistics.
 - [ ] **Phase 6 — More algorithms.** One at a time, easiest first. Each comes
       with tests, a conformance check from `Testing`, and a benchmark entry.
