@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Quality diversity over graphs · QualityDiversity.jl</title><meta name="title" content="Quality diversity over graphs · QualityDiversity.jl"/><meta property="og:title" content="Quality diversity over graphs · QualityDiversity.jl"/><meta property="twitter:title" content="Quality diversity over graphs · QualityDiversity.jl"/><meta name="description" content="Documentation for QualityDiversity.jl."/><meta property="og:description" content="Documentation for QualityDiversity.jl."/><meta property="twitter:description" content="Documentation for QualityDiversity.jl."/><meta property="og:url" content="https://wclaerhout.github.io/QualityDiversity.jl/tutorials/graphs/"/><meta property="twitter:url" content="https://wclaerhout.github.io/QualityDiversity.jl/tutorials/graphs/"/><link rel="canonical" href="https://wclaerhout.github.io/QualityDiversity.jl/tutorials/graphs/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">QualityDiversity.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../rastrigin_tutorial/">MAP-Elites on the Rastrigin function</a></li><li class="is-active"><a class="tocitem" href>Quality diversity over graphs</a><ul class="internal"><li><a class="tocitem" href="#The-question"><span>The question</span></a></li><li><a class="tocitem" href="#Scoring-and-describing-a-graph"><span>Scoring and describing a graph</span></a></li><li><a class="tocitem" href="#Varying-a-graph"><span>Varying a graph</span></a></li><li><a class="tocitem" href="#Running-it"><span>Running it</span></a></li></ul></li><li><a class="tocitem" href="../noisy/">Noisy problems</a></li><li><a class="tocitem" href="../mome/">Several objectives</a></li><li><a class="tocitem" href="../heatmap/">Plotting archives</a></li></ul></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../../guide/concepts/">Concepts</a></li><li><a class="tocitem" href="../../guide/algorithms/">Choosing an algorithm</a></li><li><a class="tocitem" href="../../guide/extending/">Extending the package</a></li><li><a class="tocitem" href="../../guide/gpu/">Running on a GPU</a></li><li><a class="tocitem" href="../../guide/comparison/">Coming from pyribs or QDax</a></li></ul></li><li><span class="tocitem">API reference</span><ul><li><a class="tocitem" href="../../api/problems/">Problems</a></li><li><a class="tocitem" href="../../api/archives/">Archives</a></li><li><a class="tocitem" href="../../api/variation/">Variation</a></li><li><a class="tocitem" href="../../api/emitters/">Emitters</a></li><li><a class="tocitem" href="../../api/algorithms/">Algorithms and solving</a></li><li><a class="tocitem" href="../../api/metrics/">Metrics</a></li><li><a class="tocitem" href="../../api/device/">Device archives and emitters</a></li><li><a class="tocitem" href="../../api/testing/">Testing</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Quality diversity over graphs</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Quality diversity over graphs</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/wclaerhout/QualityDiversity.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/wclaerhout/QualityDiversity.jl/blob/main/examples/graphs.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Quality-diversity-over-graphs"><a class="docs-heading-anchor" href="#Quality-diversity-over-graphs">Quality diversity over graphs</a><a id="Quality-diversity-over-graphs-1"></a><a class="docs-heading-anchor-permalink" href="#Quality-diversity-over-graphs" title="Permalink"></a></h1><p>The genotype here is a <code>Graphs.SimpleGraph</code>: a variable-size, discrete object that is not a vector of numbers. All the package needs from the user is</p><ol><li>a function that scores a graph and describes it (<code>QDProblem</code>), and</li><li>a variation operator for graphs (<code>GraphMutation</code> and one <code>vary</code> method).</li></ol><p>Everything else, the archive, the emitter and the loop, is the code that also runs the Rastrigin example.</p><p>Set up once, from the repository root:</p><pre><code class="nohighlight hljs">julia --project=examples -e &#39;using Pkg; Pkg.develop(path=&quot;.&quot;); Pkg.instantiate()&#39;</code></pre><p>Run:</p><pre><code class="nohighlight hljs">julia --project=examples examples/graphs.jl</code></pre><h2 id="The-question"><a class="docs-heading-anchor" href="#The-question">The question</a><a id="The-question-1"></a><a class="docs-heading-anchor-permalink" href="#The-question" title="Permalink"></a></h2><p>Which networks are efficient at carrying traffic, for each combination of how many edges they have and how clustered they are? Fitness is the global efficiency of a graph, the mean of 1/distance over all pairs of vertices (0 for pairs that are not connected). The descriptor has two statistics, both between 0 and 1: the edge density and the transitivity (the fraction of connected triples that close into a triangle). Efficiency rises with density, so the interesting comparison is between cells of equal density: how much efficiency does each degree of clustering cost?</p><pre><code class="language-julia hljs">using Graphs: SimpleGraph, add_edge!, add_vertex!, edges, erdos_renyi, global_clustering_coefficient,
+              gdistances, has_edge, ne, nv, rem_edge!, rem_vertex!
+using QualityDiversity
+using Random: AbstractRNG, Xoshiro</code></pre><h2 id="Scoring-and-describing-a-graph"><a class="docs-heading-anchor" href="#Scoring-and-describing-a-graph">Scoring and describing a graph</a><a id="Scoring-and-describing-a-graph-1"></a><a class="docs-heading-anchor-permalink" href="#Scoring-and-describing-a-graph" title="Permalink"></a></h2><pre><code class="language-julia hljs">&quot;Mean of `1/distance` over all ordered pairs of distinct vertices; unreachable pairs count 0.&quot;
+function global_efficiency(g::SimpleGraph)
+    n = nv(g)
+    total = 0.0
+    for source in 1:n
+        for distance in gdistances(g, source)
+            if distance != 0 &amp;&amp; distance != typemax(Int)
+                total += 1 / distance
+            end
+        end
+    end
+    return total / (n * (n - 1))
+end
+
+&quot;Fraction of the possible edges that are present.&quot;
+density(g::SimpleGraph) = 2 * ne(g) / (nv(g) * (nv(g) - 1))
+
+&quot;`(fitness, descriptor)` of a graph.&quot;
+score(g::SimpleGraph) = (global_efficiency(g), (density(g), global_clustering_coefficient(g)))
+
+&quot;A problem over graphs with between `min_nodes` and `max_nodes` vertices.&quot;
+function graph_problem(; min_nodes=8, max_nodes=30)
+    random_graph(rng::AbstractRNG) = erdos_renyi(rand(rng, min_nodes:max_nodes), 0.2 + 0.3 * rand(rng); rng)
+    return QDProblem(score; init=random_graph, bounds=((0, 1), (0, 1)))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">graph_problem (generic function with 1 method)</code></pre><h2 id="Varying-a-graph"><a class="docs-heading-anchor" href="#Varying-a-graph">Varying a graph</a><a id="Varying-a-graph-1"></a><a class="docs-heading-anchor-permalink" href="#Varying-a-graph" title="Permalink"></a></h2><p><code>vary</code> returns a changed copy and leaves the parent alone. A child gets one change and, with probability 1/2 each, another, and so on. A change adds an edge, removes one, moves one end of an edge, adds a vertex joined to a few others, or removes a vertex. The vertex count stays within the given limits.</p><pre><code class="language-julia hljs">&quot;&quot;&quot;
+    GraphMutation(; min_nodes=8, max_nodes=30)
+
+Random local changes to a `SimpleGraph`; see [`vary`](@ref QualityDiversity.vary).
+&quot;&quot;&quot;
+struct GraphMutation &lt;: AbstractVariation
+    min_nodes::Int
+    max_nodes::Int
+    function GraphMutation(; min_nodes=8, max_nodes=30)
+        2 &lt;= min_nodes &lt;= max_nodes ||
+            throw(ArgumentError(&quot;need 2 &lt;= min_nodes &lt;= max_nodes, got $min_nodes and $max_nodes&quot;))
+        return new(min_nodes, max_nodes)
+    end
+end
+
+function QualityDiversity.vary(rng::AbstractRNG, op::GraphMutation, parent::SimpleGraph{Int})
+    child = copy(parent)
+    mutate!(rng, op, child)
+    while rand(rng) &lt; 0.5
+        mutate!(rng, op, child)
+    end
+    return child
+end
+
+function mutate!(rng::AbstractRNG, op::GraphMutation, g::SimpleGraph{Int})
+    r = rand(rng)
+    if r &lt; 0.3
+        add_random_edge!(rng, g)
+    elseif r &lt; 0.6
+        remove_random_edge!(rng, g)
+    elseif r &lt; 0.8
+        remove_random_edge!(rng, g) &amp;&amp; add_random_edge!(rng, g)
+    elseif r &lt; 0.9
+        if nv(g) &lt; op.max_nodes
+            add_vertex!(g)
+            for _ in 1:rand(rng, 1:3)
+                add_edge!(g, nv(g), rand(rng, 1:nv(g)-1))
+            end
+        end
+    elseif nv(g) &gt; op.min_nodes
+        rem_vertex!(g, rand(rng, 1:nv(g)))
+    end
+    return g
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">mutate! (generic function with 1 method)</code></pre><p>Tries a few random pairs and adds the first missing edge; a nearly complete graph may stay unchanged.</p><pre><code class="language-julia hljs">function add_random_edge!(rng::AbstractRNG, g::SimpleGraph{Int})
+    for _ in 1:10
+        a, b = rand(rng, 1:nv(g)), rand(rng, 1:nv(g))
+        if a != b &amp;&amp; !has_edge(g, a, b)
+            return add_edge!(g, a, b)
+        end
+    end
+    return false
+end
+
+function remove_random_edge!(rng::AbstractRNG, g::SimpleGraph{Int})
+    ne(g) == 0 &amp;&amp; return false
+    e = rand(rng, collect(edges(g)))
+    return rem_edge!(g, e.src, e.dst)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">remove_random_edge! (generic function with 1 method)</code></pre><h2 id="Running-it"><a class="docs-heading-anchor" href="#Running-it">Running it</a><a id="Running-it-1"></a><a class="docs-heading-anchor-permalink" href="#Running-it" title="Permalink"></a></h2><pre><code class="language-julia hljs">function main()
+    prob = graph_problem()
+    alg = MAPElites(prob; dims=(20, 20), batch_size=100, genotype=SimpleGraph{Int},
+                    variation=GraphMutation())
+    result = solve(prob, alg; budget=100_000, rng=Xoshiro(1))
+    archive = result.archive
+
+    println(&quot;evaluations: &quot;, result.n_evals)
+    println(length(archive), &quot; of &quot;, QualityDiversity.capacity(archive), &quot; cells filled (coverage &quot;,
+            round(coverage(archive); digits=3), &quot;)&quot;)
+    println(&quot;best efficiency: &quot;, round(max_fitness(archive); digits=3))
+
+    sizes = [nv(g) for (g, _) in QualityDiversity.elites(archive)]
+    println(&quot;vertices in the archive: &quot;, minimum(sizes), &quot; to &quot;, maximum(sizes))
+
+    # At one density, the most efficient graph found for each level of clustering.
+    println(&quot;\ndensity 0.25–0.35:   transitivity   vertices  edges  efficiency&quot;)
+    best = Dict{Int,Any}()
+    for (g, ev) in QualityDiversity.elites(archive)
+        0.25 &lt;= ev.descriptor[1] &lt; 0.35 || continue
+        bin = floor(Int, ev.descriptor[2] * 5) + 1
+        if !haskey(best, bin) || ev.fitness &gt; best[bin][2].fitness
+            best[bin] = (g, ev)
+        end
+    end
+    for bin in sort!(collect(keys(best)))
+        g, ev = best[bin]
+        println(rpad(&quot;&quot;, 21), rpad(&quot;$((bin - 1) / 5)–$(bin / 5)&quot;, 14), rpad(nv(g), 10), rpad(ne(g), 7),
+                round(ev.fitness; digits=3))
+    end
+
+    # A text picture of the grid: darker means more efficient, blank is empty.
+    # Columns are the density, rows the transitivity.
+    shades = collect(&quot; ░▒▓█&quot;)
+    efficiencies = fill(NaN, 20, 20)
+    for (_, ev) in QualityDiversity.elites(archive)
+        i = QualityDiversity.cell_index(archive, ev.descriptor) - 1
+        efficiencies[i ÷ 20 + 1, i % 20 + 1] = ev.fitness
+    end
+    lo, hi = extrema(filter(!isnan, efficiencies))
+    println()
+    for row in 1:20
+        println(join(isnan(f) ? &#39; &#39; : shades[2 + round(Int, 3 * (f - lo) / (hi - lo))]
+                     for f in efficiencies[row, :]))
+    end
+    return result
+end
+
+
+main()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">QDResult after 100000 evaluations
+  archive: GridArchive with 275 of 400 cells occupied
+  qd_score: 175.04261327199617
+  coverage: 0.6875
+  max_fitness: 1.0
+  mean_fitness: 0.6365185937163498</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../rastrigin_tutorial/">« MAP-Elites on the Rastrigin function</a><a class="docs-footer-nextpage" href="../noisy/">Noisy problems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Friday 16 October 2026 16:12">Friday 16 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
