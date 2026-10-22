@@ -38,9 +38,7 @@ end
 
     t = SlidingBoundariesArchive((4,), ((0, 1),); outside=ThrowOutside())
     @test_throws "descriptor component 1 is 1.5, outside the archive bounds [0.0, 1.0]" QD.cell_index(t, [1.5])
-    r = SlidingBoundariesArchive((4,), ((0, 1),); outside=RejectOutside())
-    @test QD.cell_index(r, [1.5]) == 0
-    @test_throws "needs finite descriptors" QD.cell_index(r, [NaN])
+    @test_throws "a SlidingBoundariesArchive cannot use RejectOutside()" SlidingBoundariesArchive((4,), ((0, 1),); outside=RejectOutside())
 end
 
 @testset "SlidingBoundariesArchive remap" begin
@@ -88,15 +86,26 @@ end
 end
 
 @testset "SlidingBoundariesArchive outside the boundaries" begin
-    # rejected solutions enter the buffer, so the boundaries grow toward them
-    a = SlidingBoundariesArchive((2,), ((0, 1),); outside=RejectOutside(), remap_frequency=4)
+    # clamped solutions enter the buffer, so the boundaries grow toward them
+    a = SlidingBoundariesArchive((2,), ((0, 1),); remap_frequency=4)
     @test offer!(a, 1, (0.5,)).status == QD.NewCell
-    @test offer!(a, 2, (3.0,)) == AddResult(QD.Rejected, 0.0)
-    @test offer!(a, 3, (-2.0,)).status == QD.Rejected
+    @test offer!(a, 2, (3.0,)).status == QD.Improved   # clamped into the cell of 0.5
+    @test offer!(a, 3, (-2.0,)).status == QD.NewCell
     offer!(a, 4, (0.6,))
     @test QD.descriptor_bounds(a) == ((-2.0, 3.0),)
     @test QD.boundaries(a) == ([-2.0, 0.6, 3.0],)
     @test Dict(only(ev.descriptor) => only(x) for (x, ev) in QD.elites(a)) == Dict(-2.0 => 3.0, 0.6 => 4.0)
+
+    # a non-finite component after one outside the boundaries throws before the archive changes
+    for outside in (ClampOutside(), ThrowOutside())
+        c = SlidingBoundariesArchive((2, 2), ((0, 1), (0, 1)); outside, remap_frequency=4)
+        for (f, d) in zip(1:3, [(0.1, 0.1), (0.9, 0.1), (0.1, 0.9)])
+            offer!(c, f, d)
+        end
+        @test_throws ArgumentError offer!(c, 4, (2.0, NaN))
+        @test length(c) == 3
+        @test c.offered == 3
+    end
 
     # the archive does not change when a descriptor throws
     t = SlidingBoundariesArchive((2,), ((0, 1),); outside=ThrowOutside(), remap_frequency=1)

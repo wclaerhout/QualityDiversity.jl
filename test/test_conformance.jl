@@ -149,7 +149,6 @@ end
     test_archive(() -> SlidingBoundariesArchive(prob; dims=(8, 8), remap_frequency=1, buffer_capacity=10), prob; batchwise...)
     test_archive(() -> SlidingBoundariesArchive(prob; dims=(1, 1), remap_frequency=5), prob; batchwise...)
     test_archive(() -> SlidingBoundariesArchive(prob; dims=(5, 3), remap_frequency=5, fitness=Float32), prob; batchwise...)
-    test_archive(() -> SlidingBoundariesArchive(prob; dims=(8, 8), remap_frequency=5, outside=RejectOutside()), prob; batchwise...)
 end
 
 @testset "front archives" begin

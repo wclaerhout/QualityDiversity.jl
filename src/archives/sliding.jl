@@ -29,8 +29,10 @@ the last cell. A descriptor outside the boundaries is handled by `outside`, as f
 [`GridArchive`](@ref), but the default is `ClampOutside()`: after a remap the outer
 boundaries are the extremes of the buffer, so new solutions often land outside them.
 Old elites are always clamped during a remap. Since every offered solution enters the
-buffer, the boundaries grow toward descriptors outside them. A descriptor with a
-non-finite component throws an `ArgumentError` whatever the policy.
+buffer, the boundaries grow toward descriptors outside them. For the same reason
+`RejectOutside()` is refused: a rejected solution would enter the cells at the next
+remap. A descriptor with a non-finite component throws an `ArgumentError` whatever the
+policy.
 
 `add_batch!` computes every result against the archive as it was before the batch, as
 for the other [`CellArchive`](@ref)s. If the number of offered solutions passes a
@@ -102,6 +104,7 @@ mutable struct SlidingBoundariesArchive{G,F<:Real,N,O<:OutsidePolicy,P} <: CellA
                 throw(ArgumentError("dims[$i] is $(dims[i]) but every dimension needs at least one cell"))
             check_bound(i, lower[i], upper[i])
         end
+        check_sliding_outside(outside)
         remap_frequency >= 1 ||
             throw(ArgumentError("remap_frequency must be at least 1, got $remap_frequency"))
         buffer_capacity >= 1 ||
@@ -118,6 +121,11 @@ mutable struct SlidingBoundariesArchive{G,F<:Real,N,O<:OutsidePolicy,P} <: CellA
                               slots(G), slots(F), slots(SVector{N,Float64}), slots(P), 1, 0, 0,
                               slots(Float64))
     end
+end
+
+check_sliding_outside(::OutsidePolicy) = nothing
+function check_sliding_outside(::RejectOutside)
+    throw(ArgumentError("a SlidingBoundariesArchive cannot use RejectOutside(): every offered solution enters its buffer, so a rejected one would enter the cells at the next remap; use ClampOutside() or ThrowOutside()"))
 end
 
 regular_boundaries(lo, hi, n) = collect(range(lo, hi; length=n + 1))
@@ -169,8 +177,7 @@ descriptor_bounds(archive::SlidingBoundariesArchive) = map(b -> (first(b), last(
 Linear index of the cell that contains descriptor `d` under the current boundaries,
 numbered as in a [`GridArchive`](@ref). Throws an `ArgumentError` if `d` has the wrong
 number of dimensions or a non-finite component. A component outside the boundaries is
-handled by the archive's `outside` policy; `RejectOutside()` returns `0`, which is not
-a cell.
+handled by the archive's `outside` policy.
 """
 function cell_index(archive::SlidingBoundariesArchive, d::AbstractVector{<:Real})
     return sliding_cell(archive, archive.outside, d)
@@ -191,7 +198,6 @@ function sliding_cell(archive::SlidingBoundariesArchive{G,F,N}, outside, d::Abst
         hi = b[n+1]
         if !(lo <= x <= hi)
             x = resolve_outside(outside, i, x, lo, hi)
-            isnan(x) && return 0
         end
         index += (last_cell_at_or_below(b, n, x) - 1) * stride
         stride *= n
@@ -224,7 +230,7 @@ function add!(archive::SlidingBoundariesArchive{G,F,N,O,P}, x, ev::Evaluation{<:
     i = cell_index(archive, ev.descriptor)
     fitness = stored_fitness(F, ev.fitness)    # throws before the archive changes
     stored_phenotype(P, ev.phenotype)
-    result = i == 0 ? AddResult(Rejected, zero(F)) : classify(archive, i, fitness)
+    result = classify(archive, i, fitness)
     remember!(archive, x, ev)
     remap!(archive)
     return result
