@@ -912,8 +912,9 @@ Not settled design; the state of the work and the plan agreed with the author.
 
 - **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70) is merged →
   benchmarks in `Float32` on a device (PR #71) is merged → docstring of the clamped elites
-  of `SlidingBoundariesArchive` (PR #72) is merged → release PR (0.1.0,
-  `Pkg.add("QualityDiversity")` in README and docs, a `[compat]` entry for Tables) → figures.
+  of `SlidingBoundariesArchive` (PR #72) is merged → speed figures (the author wants them
+  in the first release) → release PR (0.1.0 in `Project.toml`, `Pkg.add("QualityDiversity")`
+  in README and docs; the `[compat]` entry for Tables is already there).
 - **`fix-sliding-outside` is dropped for now.** Commit f5bb1fc ("Widen sliding boundaries
   to outside descriptors"), kept only on that local branch, removes the `outside` keyword
   of `SlidingBoundariesArchive` and widens the outer boundaries at once to every offered
