@@ -941,7 +941,22 @@ Not settled design; the state of the work and the plan agreed with the author.
   `test/test_device.jl` checks it. `benchmark/compare/gpu` defines its own Rastrigin in
   `eltype(x)`, so the published GPU figures are not affected.
 - **Speed figures.** A few plots, drawn by a script from CSV files that the comparison
-  scripts write, images in `docs/src/assets`:
+  scripts write, images in `docs/src/assets`. Agreed 2026-10-23: every run (CPU and GPU) is
+  measured again on the server (Threadripper PRO 5955WX + RTX 5090), the author runs the
+  scripts there; two PRs, first the CSV output, plotting script, new runs, figures and the
+  split GPU table, then the capability table; one headline figure (CPU MAP-Elites) in the
+  README, all figures on the comparison page of the docs, full tables stay in
+  `benchmark/compare/README.md`.
+  State: branch `speed-figures` (commit 1802035, local only until the author approves a
+  push) makes every comparison script write one row per timed run to
+  `benchmark/compare/results/*.csv` (`results.jl`/`results.py`), times Julia runs with
+  `@elapsed` instead of BenchmarkTools, adds `plot.jl` (run with `--project=docs`; three
+  SVGs `speed-map-elites-cpu`, `speed-algorithms-cpu`, `speed-map-elites-gpu` in
+  `docs/src/assets`) and `run_all.sh [cpu|gpu|all]` (single-core runs on core `CPU`, default
+  2). Tested on the laptop with short runs (GPU scripts on the CPU backend). Next: the
+  author runs `run_all.sh` on the server and commits the CSVs; then plot, rewrite the tables
+  of `benchmark/compare/README.md` from the new runs, split the GPU table, put the figures in
+  README and `docs/src/guide/comparison.md`.
   - CPU MAP-Elites, time against batch size: QualityDiversity.jl, pyribs, QDax (grid index);
     CPU bars for CMA-ME, CMA-MAE and MOME.
   - GPU against GPU only. Never put QDax on a GPU next to QualityDiversity.jl on a CPU; the
