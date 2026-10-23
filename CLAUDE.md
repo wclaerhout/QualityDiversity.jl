@@ -912,8 +912,7 @@ Not settled design; the state of the work and the plan agreed with the author.
 
 - **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70) is merged →
   benchmarks in `Float32` on a device (PR #71) is merged → docstring of the clamped elites
-  of `SlidingBoundariesArchive` (PR #72 from `document-sliding-clamp`, open; full suite
-  passes on release and LTS, docs build clean) → release PR (0.1.0,
+  of `SlidingBoundariesArchive` (PR #72) is merged → release PR (0.1.0,
   `Pkg.add("QualityDiversity")` in README and docs, a `[compat]` entry for Tables) → figures.
 - **`fix-sliding-outside` is dropped for now.** Commit f5bb1fc ("Widen sliding boundaries
   to outside descriptors"), kept only on that local branch, removes the `outside` keyword
