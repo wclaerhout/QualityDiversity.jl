@@ -27,9 +27,21 @@ pyribs  reference fitness -407.7764921686897  descriptor (-3.0450526315789475, 3
 ```
 
 Time covers building the archive, the initial batch and the rest of the
-budget; compilation is excluded. Julia is timed with BenchmarkTools, Python
-with `time.perf_counter`. "Middle half" is the range from the first to the
-third quartile of the run times.
+budget; compilation is excluded. Julia is timed with `@elapsed` and Python
+with `time.perf_counter`, after one untimed run that compiles. "Middle half" is
+the range from the first to the third quartile of the run times.
+
+Every script prints its table and writes one row per timed run to a CSV file in
+`results/` (`results.jl` and `results.py` write the same columns, with the
+software versions, the commit and the hardware). `plot.jl` draws the figures of
+the documentation from these files:
+
+```
+julia --project=docs benchmark/compare/plot.jl
+```
+
+`run_all.sh` runs every script on one machine with the core pinning described
+below; the CSV files in `results/` come from one such run.
 
 ## How each library is used
 

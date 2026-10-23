@@ -9,6 +9,9 @@ Environment variables:
     QDAX_GRID_LOOKUP=1  replace QDax's cell lookup by direct arithmetic (below)
     REPEATS=5           timed runs per batch size (default 21)
 
+The timed runs go to results/ (see results.py), in a file named after the cell
+lookup, the precision and the device.
+
 QDax finds the cell of a descriptor by comparing it with every centroid, which
 suits any tessellation and an accelerator, but costs batch size × number of
 cells on a CPU and dominates the run time here. With QDAX_GRID_LOOKUP=1 that one
@@ -34,6 +37,8 @@ from qdax.core.containers.mapelites_repertoire import compute_euclidean_centroid
 from qdax.core.emitters.standard_emitters import MixingEmitter
 from qdax.core.map_elites import MAPElites
 from qdax.utils.metrics import default_qd_metrics
+
+import results
 
 DIM = 20                  # solution dimension
 DIMS = (100, 100)         # archive cells
@@ -121,23 +126,35 @@ def timed(run, seed):
 
 if __name__ == "__main__":
     dtype = jnp.zeros(()).dtype
-    lookup = "direct grid index" if os.environ.get("QDAX_GRID_LOOKUP") == "1" else "QDax centroid search"
-    if os.environ.get("QDAX_GRID_LOOKUP") == "1":
+    grid = os.environ.get("QDAX_GRID_LOOKUP") == "1"
+    lookup = "direct grid index" if grid else "QDax centroid search"
+    if grid:
         print(f"grid lookup agrees with the centroid search on all but {use_grid_lookup()} of 20000 descriptors")
     print(f"QDax {qdax.__version__}, jax {jax.__version__}, {jax.devices()[0]}, {dtype}, cell lookup: {lookup}, {REPEATS} runs per row")
     print("| batch size | min s | median s | middle half s | evals/s (median) | coverage | max fitness | QD score |")
     print("|---:|---:|---:|---:|---:|---:|---:|---:|")
+    device, gpu = results.jax_device()
+    software = results.software(("QDax", qdax.__version__), ("jax", jax.__version__))
+    hardware = results.hardware() + (f"; {gpu}" if gpu else "")
+    variant = "grid index" if grid else "centroid search"
+    rows = []
     for batch_size in BATCH_SIZES:
         run = make_run(batch_size)
         timed(run, 0)   # compile
-        runs = [timed(run, seed) for seed in range(1, REPEATS + 1)]
-        times = [r[0] for r in runs]
-        median_time = statistics.median(times)
-        lo, _, hi = statistics.quantiles(times, n=4, method="inclusive")
+        runs = [(seed, *timed(run, seed)) for seed in range(1, REPEATS + 1)]
+        fastest, median_time, lo, hi = results.summary([r[1] for r in runs])
         print(
-            f"| {batch_size} | {min(times):.3f} | {median_time:.3f} | {lo:.3f}–{hi:.3f} "
+            f"| {batch_size} | {fastest:.3f} | {median_time:.3f} | {lo:.3f}–{hi:.3f} "
             f"| {round(BUDGET / median_time)} "
-            f"| {statistics.median(r[1] for r in runs):.3f} "
-            f"| {statistics.median(r[2] for r in runs):.1f} "
-            f"| {statistics.median(r[3] for r in runs):.0f} |"
+            f"| {statistics.median(r[2] for r in runs):.3f} "
+            f"| {statistics.median(r[3] for r in runs):.1f} "
+            f"| {statistics.median(r[4] for r in runs):.0f} |"
         )
+        rows += [
+            dict(benchmark="map_elites", library="QDax", method="MAP-Elites", variant=variant,
+                 device=device, precision=str(dtype), batch_size=batch_size, seed=seed,
+                 seconds=seconds, coverage=cov, max_fitness=best, qd_score=score,
+                 software=software, hardware=hardware)
+            for seed, seconds, cov, best, score in runs
+        ]
+    results.write_runs(f"map_elites-qdax-{'grid' if grid else 'centroids'}-{dtype}-{device}", rows)

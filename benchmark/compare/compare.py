@@ -1,9 +1,11 @@
 """MAP-Elites on 20-dimensional Rastrigin with pyribs.
 
 Run:  python compare.py
-The matching Julia script is compare.jl; both print the same columns. The
-problem, archive, mutation, batch sizes and evaluation budget are the same.
+The matching Julia script is compare.jl; both print the same columns and write
+the timed runs to results/ (see results.py). The problem, archive, mutation,
+batch sizes and evaluation budget are the same.
 """
+import os
 import statistics
 import time
 
@@ -13,12 +15,14 @@ from ribs.archives import GridArchive
 from ribs.emitters import GaussianEmitter
 from ribs.schedulers import Scheduler
 
+import results
+
 DIM = 20                  # solution dimension
 DIMS = (100, 100)         # archive cells
 SIGMA = 0.5               # Gaussian mutation standard deviation
 BUDGET = 360_000          # evaluations, a multiple of every batch size
 BATCH_SIZES = (36, 100, 1000, 10_000)
-REPEATS = 21              # timed runs per batch size, one seed each
+REPEATS = int(os.environ.get("REPEATS", 21))   # timed runs per batch size, one seed each
 LIMIT = 5.12
 OFFSET = 41.0 * DIM       # the same QD-score offset as Rastrigin in Julia
 
@@ -67,16 +71,25 @@ if __name__ == "__main__":
     print(f"{REPEATS} runs per row")
     print("| batch size | min s | median s | middle half s | evals/s (median) | coverage | max fitness | QD score |")
     print("|---:|---:|---:|---:|---:|---:|---:|---:|")
+    software = results.software(("pyribs", ribs.__version__), ("numpy", np.__version__))
+    hardware = results.hardware()
+    rows = []
     for batch_size in BATCH_SIZES:
         run_once(batch_size, 0)   # warm up (numba compiles on first use)
-        runs = [run_once(batch_size, seed) for seed in range(1, REPEATS + 1)]
-        times = [r[0] for r in runs]
-        median_time = statistics.median(times)
-        lo, _, hi = statistics.quantiles(times, n=4, method="inclusive")
+        runs = [(seed, *run_once(batch_size, seed)) for seed in range(1, REPEATS + 1)]
+        fastest, median_time, lo, hi = results.summary([r[1] for r in runs])
         print(
-            f"| {batch_size} | {min(times):.3f} | {median_time:.3f} | {lo:.3f}–{hi:.3f} "
+            f"| {batch_size} | {fastest:.3f} | {median_time:.3f} | {lo:.3f}–{hi:.3f} "
             f"| {round(BUDGET / median_time)} "
-            f"| {statistics.median(r[1] for r in runs):.3f} "
-            f"| {statistics.median(r[2] for r in runs):.1f} "
-            f"| {statistics.median(r[3] for r in runs):.0f} |"
+            f"| {statistics.median(r[2] for r in runs):.3f} "
+            f"| {statistics.median(r[3] for r in runs):.1f} "
+            f"| {statistics.median(r[4] for r in runs):.0f} |"
         )
+        rows += [
+            dict(benchmark="map_elites", library="pyribs", method="MAP-Elites", variant="grid",
+                 device="cpu", precision="float64", threads=1, batch_size=batch_size, seed=seed,
+                 seconds=seconds, coverage=cov, max_fitness=best, qd_score=score,
+                 software=software, hardware=hardware)
+            for seed, seconds, cov, best, score in runs
+        ]
+    results.write_runs("map_elites-pyribs-cpu", rows)

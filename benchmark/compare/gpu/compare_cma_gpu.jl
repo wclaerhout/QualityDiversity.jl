@@ -2,7 +2,8 @@
 # DeviceCMAEmitter on a CUDA GPU, for a growing number of CMA-ES searches.
 # Run:  julia --threads=8 benchmark/compare/gpu/compare_cma_gpu.jl
 # Choose the GPU as for compare_gpu.jl. The searches of the device emitter sample and
-# update on the host threads, so the number of threads matters.
+# update on the host threads, so the number of threads matters. The timed runs go to
+# ../results/ (see ../results.jl).
 using Pkg
 Pkg.activate(@__DIR__)
 Pkg.instantiate()
@@ -10,13 +11,13 @@ Pkg.instantiate()
 using CUDA
 using QualityDiversity
 using Random: Xoshiro
-using Statistics: median
+include(joinpath(@__DIR__, "..", "results.jl"))
 
 const DIM = 20
 const DIMS = (100, 100)
 const BUDGET = 1_200_000     # a multiple of every round: 12 candidates per search
 const SEARCHES = (5, 50, 500)
-const REPEATS = 5
+const REPEATS = parse(Int, get(ENV, "REPEATS", "5"))
 const LIMIT = 5.12f0
 const OFFSET = 41.0 * DIM
 
@@ -45,14 +46,24 @@ make_algorithm(searches, device) =
 println("Julia $VERSION, $(Threads.nthreads()) threads, CUDA ", CUDA.name(CUDA.device()), ", $REPEATS runs per row")
 println("| searches | where | median s | evals/s | coverage | QD score |")
 println("|---:|---|---:|---:|---:|---:|")
+rows = []
+const SOFTWARE = software() * "; CUDA.jl $(pkgversion(CUDA))"
+const HARDWARE = hardware() * "; " * CUDA.name(CUDA.device())
 for searches in SEARCHES, (where, device) in (("host", nothing), ("device", CuArray))
     solve(prob, make_algorithm(searches, device); budget=36 * searches, rng=Xoshiro(0))   # compile
     runs = map(1:REPEATS) do seed
         alg = make_algorithm(searches, device)
         seconds = @elapsed result = solve(prob, alg; budget=BUDGET, rng=Xoshiro(seed))
-        (seconds, coverage(result.archive), qd_score(result.archive; offset=OFFSET))
+        (; seed, seconds, coverage=coverage(result.archive),
+         qd_score=Float64(qd_score(result.archive; offset=OFFSET)))
     end
-    t = median(r[1] for r in runs)
+    t = median(r.seconds for r in runs)
     println("| ", searches, " | ", where, " | ", round(t; digits=3), " | ", round(Int, BUDGET / t),
-            " | ", round(median(r[2] for r in runs); digits=3), " | ", round(Int, median(r[3] for r in runs)), " |")
+            " | ", round(median(r.coverage for r in runs); digits=3), " | ", round(Int, median(r.qd_score for r in runs)), " |")
+    for r in runs
+        push!(rows, (; benchmark="cma_searches", library="QualityDiversity.jl", method="CMA-ME", variant=where,
+                     device=where == "host" ? "cpu" : "gpu", precision="float32", threads=Threads.nthreads(),
+                     batch_size=12 * searches, searches, r..., software=SOFTWARE, hardware=HARDWARE))
+    end
 end
+write_runs("cma_searches-qualitydiversity", rows)

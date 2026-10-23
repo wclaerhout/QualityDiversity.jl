@@ -1,16 +1,16 @@
 # MOME on the two-objective BiSphere benchmark with QualityDiversity.jl.
 # Run:  julia --threads=1 benchmark/compare/compare_mome.jl
-# The matching script for QDax is compare_mome_qdax.py; both print the same columns.
+# The matching script for QDax is compare_mome_qdax.py; both print the same columns and
+# write the timed runs to results/ (see results.jl).
 # pyribs has no multi-objective archive.
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 VERSION < v"1.11" && Pkg.develop(PackageSpec(path=joinpath(@__DIR__, "..", "..")))
 Pkg.instantiate()
 
-using BenchmarkTools
 using QualityDiversity, QualityDiversity.Benchmarks
 using Random: Xoshiro
-using Statistics: median
+include("results.jl")
 
 const DIM = 10                  # solution dimension
 const DIMS = (20, 20)           # archive cells
@@ -31,32 +31,27 @@ println("reference fitness ", Tuple(reference.fitness), " descriptor ", Tuple(re
 make_algorithm() = MOME(prob; dims=DIMS, max_front=MAX_FRONT, batch_size=BATCH,
                         variation=GaussianMutation(SIGMA))
 
-const seed = Ref(0)
-const finals = []
-
-function benchmark_mome()
-    empty!(finals)
-    seed[] = 0
-    trial = @benchmark begin
-        result = solve(prob, alg; budget=BUDGET, rng=Xoshiro(seed[]))
-        a = result.archive
-        push!(finals, (coverage=coverage(a), moqd_score=qd_score(a), global_hypervolume=global_hypervolume(a),
-                       max_hypervolume=QualityDiversity.max_hypervolume(a), solutions=QualityDiversity.num_solutions(a)))
-    end setup = (alg = make_algorithm(); seed[] += 1) evals = 1 samples = REPEATS seconds = 900
-    return trial, copy(finals)
-end
-
 println("\nJulia $VERSION, $(Threads.nthreads()) thread(s), $REPEATS runs, budget $BUDGET")
 println("| min s | median s | evals/s (median) | coverage | MOQD score | global hypervolume | max hypervolume | solutions |")
 println("|---:|---:|---:|---:|---:|---:|---:|---:|")
-benchmark_mome()                                   # compile
-trial, runs = benchmark_mome()
-times = trial.times ./ 1e9
-println("| ", round(minimum(times); digits=3),
-        " | ", round(median(times); digits=3),
-        " | ", round(Int, BUDGET / median(times)),
-        " | ", round(median(r.coverage for r in runs); digits=3),
-        " | ", round(Int, median(r.moqd_score for r in runs)),
-        " | ", round(Int, median(r.global_hypervolume for r in runs)),
-        " | ", round(Int, median(r.max_hypervolume for r in runs)),
-        " | ", round(Int, median(r.solutions for r in runs)), " |")
+runs = timed_runs(seed -> solve(prob, make_algorithm(); budget=BUDGET, rng=Xoshiro(seed)),
+                  result -> (a = result.archive;
+                             (coverage=coverage(a), qd_score=qd_score(a), global_hypervolume=global_hypervolume(a),
+                              max_hypervolume=QualityDiversity.max_hypervolume(a),
+                              solutions=QualityDiversity.num_solutions(a))),
+                  REPEATS)
+s = summary(runs)
+println("| ", round(s.min; digits=3),
+        " | ", round(s.median; digits=3),
+        " | ", round(Int, BUDGET / s.median),
+        " | ", round(s.stat(r -> r.coverage); digits=3),
+        " | ", round(Int, s.stat(r -> r.qd_score)),
+        " | ", round(Int, s.stat(r -> r.global_hypervolume)),
+        " | ", round(Int, s.stat(r -> r.max_hypervolume)),
+        " | ", round(Int, s.stat(r -> r.solutions)), " |")
+# The qd_score column holds the MOQD score.
+const SOFTWARE, HARDWARE = software(), hardware()
+write_runs("mome-qualitydiversity-cpu-t$(Threads.nthreads())",
+           [(; benchmark="mome", library="QualityDiversity.jl", method="MOME", device="cpu", precision="float64",
+             threads=Threads.nthreads(), batch_size=BATCH, r..., software=SOFTWARE, hardware=HARDWARE)
+            for r in runs])
