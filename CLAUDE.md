@@ -909,16 +909,15 @@ None at present.
 
 Not settled design; the state of the work and the plan agreed with the author.
 
-- **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70, open) →
-  benchmarks in `Float32` on a device (branch `device-float32-benchmarks`, stacked on
-  `fix-device-descriptors`; its PR waits for #70) → the author decides on
+- **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70) is merged →
+  benchmarks in `Float32` on a device (branch `device-float32-benchmarks`, on `main`) → the author decides on
   the local branch `fix-sliding-outside` → release PR (0.1.0, `Pkg.add("QualityDiversity")`
   in README and docs, a `[compat]` entry for Tables) → figures.
 - **`fix-sliding-outside` is not on main.** Commit f5bb1fc ("Widen sliding boundaries to
   outside descriptors") exists only in the author's local clone. The "Sliding boundaries"
   decision above describes that branch; on `origin/main` `SlidingBoundariesArchive` still
   takes `outside`.
-- **#47: PR #70 from branch `fix-device-descriptors`, open.** Device archives stored
+- **#47: PR #70, merged.** Device archives stored
   descriptors in the genotype float type `T`, so with `Float32` genotypes host and device
   could bin a descriptor near a boundary differently. The branch stores them in
   `descriptor_eltype` of the archive (`Float64`; the author chose this over a literal
