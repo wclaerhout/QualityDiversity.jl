@@ -942,21 +942,55 @@ Not settled design; the state of the work and the plan agreed with the author.
   `eltype(x)`, so the published GPU figures are not affected.
 - **Speed figures.** A few plots, drawn by a script from CSV files that the comparison
   scripts write, images in `docs/src/assets`. Agreed 2026-10-23: every run (CPU and GPU) is
-  measured again on the server (Threadripper PRO 5955WX + RTX 5090), the author runs the
-  scripts there; two PRs, first the CSV output, plotting script, new runs, figures and the
+  measured again on the server (Threadripper PRO 5955WX + RTX 5090), by a Claude session
+  there following the steps below; two PRs, first the CSV output, plotting script, new runs, figures and the
   split GPU table, then the capability table; one headline figure (CPU MAP-Elites) in the
   README, all figures on the comparison page of the docs, full tables stay in
   `benchmark/compare/README.md`.
-  State: branch `speed-figures` (commit 1802035, local only until the author approves a
-  push) makes every comparison script write one row per timed run to
-  `benchmark/compare/results/*.csv` (`results.jl`/`results.py`), times Julia runs with
-  `@elapsed` instead of BenchmarkTools, adds `plot.jl` (run with `--project=docs`; three
-  SVGs `speed-map-elites-cpu`, `speed-algorithms-cpu`, `speed-map-elites-gpu` in
-  `docs/src/assets`) and `run_all.sh [cpu|gpu|all]` (single-core runs on core `CPU`, default
-  2). Tested on the laptop with short runs (GPU scripts on the CPU backend). Next: the
-  author runs `run_all.sh` on the server and commits the CSVs; then plot, rewrite the tables
-  of `benchmark/compare/README.md` from the new runs, split the GPU table, put the figures in
-  README and `docs/src/guide/comparison.md`.
+  State: branch `speed-figures` makes every comparison script write one row per timed run
+  to `benchmark/compare/results/*.csv` (`results.jl`/`results.py`), times Julia runs with
+  `@elapsed` after one compiling run, and adds `plot.jl` and `run_all.sh`. Tested on the
+  laptop with short runs only (GPU scripts on the CPU backend), so the server run is the
+  first real one.
+
+  **Steps for a session on the server** (the author has asked for these; do them in order
+  without asking again, and report at the end):
+  1. `git fetch origin`, then `git checkout speed-figures` and `git pull`. Check that
+     `benchmark/compare/run_all.sh` exists; if not, the branch is not pushed yet: stop and say so.
+  2. Find the RTX 5090 with `nvidia-smi` and note its index. Check that `taskset`, `julia`
+     and Python 3 are available.
+  3. Python environment, outside the repository (e.g. `~/qd-venv`):
+     `python3 -m venv ~/qd-venv && ~/qd-venv/bin/pip install -r benchmark/compare/requirements.txt "jax[cuda12]"`.
+     Check: `~/qd-venv/bin/python -c "import jax; print(jax.devices())"` lists the GPU.
+  4. Short smoke test before the long run, so a broken script fails in minutes:
+     `REPEATS=1 PYTHON=~/qd-venv/bin/python CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<index> benchmark/compare/run_all.sh gpu`.
+     It must write `map_elites-qualitydiversity-gpu.csv`, `cma_searches-qualitydiversity.csv`
+     and four `map_elites-qdax-*-gpu.csv` files to `benchmark/compare/results/`. Then delete
+     `benchmark/compare/results/` (the smoke-test numbers must not be committed).
+  5. The full run, in the background (about 3 hours; it runs the scripts one after another,
+     so nothing else heavy should run on the machine meanwhile, and in particular not on
+     cores 0–7):
+     `PYTHON=~/qd-venv/bin/python CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<index> benchmark/compare/run_all.sh all > ~/run_all.log 2>&1`.
+     Expect 18 CSV files: 4 QualityDiversity.jl CPU (`map_elites` t1 and t8, `cma` t1, `mome`
+     t1), 2 pyribs, `map_elites-qdax-grid-float{32,64}-cpu`, `map_elites-qdax-centroids-float32-cpu`,
+     `cma-qdax-float{32,64}-cpu`, `mome-qdax-float64-cpu`, and the 6 GPU files of step 4. If a
+     script fails, fix it on the branch, rerun only that script (the line from `run_all.sh`),
+     and mention the fix in the report.
+  6. Figures: `julia --project=docs -e 'using Pkg; Pkg.instantiate()'`, then
+     `julia --project=docs benchmark/compare/plot.jl`. It writes `speed-map-elites-cpu.svg`,
+     `speed-algorithms-cpu.svg` and `speed-map-elites-gpu.svg` to `docs/src/assets`. Look at
+     each (render to PNG with `rsvg-convert` or save a PNG copy with CairoMakie, then view
+     it): no clipped labels, every library present in the legend, the caption names the
+     Threadripper and the RTX 5090.
+  7. Commit the CSV files and the three SVGs on `speed-figures` ("Add comparison runs and
+     speed figures"), with the `Assisted-by:` trailer. Do not push, and do not open a PR:
+     the author approves both. Report the medians next to the old README tables.
+  After that (with the author): rewrite the tables of `benchmark/compare/README.md` from
+  the new runs and record the hardware and versions; split the GPU table so that no table
+  mixes GPU and CPU columns (the CPU rows of 1 and 8 threads become their own table); put
+  `speed-map-elites-cpu.svg` in the README and all three figures in
+  `docs/src/guide/comparison.md`; check the README's "slow or impossible" sentence; full docs
+  build; PR text approved by the author.
   - CPU MAP-Elites, time against batch size: QualityDiversity.jl, pyribs, QDax (grid index);
     CPU bars for CMA-ME, CMA-MAE and MOME.
   - GPU against GPU only. Never put QDax on a GPU next to QualityDiversity.jl on a CPU; the
