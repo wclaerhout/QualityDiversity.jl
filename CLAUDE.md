@@ -820,18 +820,19 @@ Settled; change them only with the author's agreement.
   up to ties in fitness and pyribs's tolerance of `1e-6` below a boundary, with one pyribs
   bug corrected in the reference: pyribs 0.12.0 clips descriptors to the old bounds while
   it adds the solutions back during a remap, so when the boundaries widen, solutions land
-  in the wrong cells. The archive has no `outside` policy, since following the descriptors
-  is its purpose (#40): a descriptor below the boundaries goes to the first cell along that
-  dimension and one above to the last, and when the solution is offered the outer boundary
-  moves out to it; a remap sets the quantiles of the buffer and then widens the outer
-  boundaries to the old elites it adds back. Only the outer cells widen, so cell assignment
-  is that of pyribs's clipping (the elites and inner boundaries of the reference match),
-  except below cells of zero width, where the first cell takes the descriptor and pyribs
-  the last of them; and every stored and buffered descriptor lies inside its cell and the
-  bounds. `cell_index` does not widen. A non-finite descriptor throws, because it would make
-  the boundaries infinite. Every offered solution enters the buffer, also one that is
-  rejected. `ThresholdArchive` and `SpreadArchive` cannot wrap
-  it: their thresholds and spreads belong to cells that move.
+  in the wrong cells. A descriptor outside the boundaries is handled by `outside`, as for a
+  `GridArchive`, but the default is `ClampOutside()`, as pyribs clips: after a remap the
+  outer boundaries are the extremes of the buffer, so new solutions often land outside
+  them. Clamping only chooses the cell; the stored and buffered descriptor is the one the
+  problem returned. Every solution that has a cell enters the buffer, also one that is
+  rejected, so with `ClampOutside()` the next remap widens the boundaries to it; with
+  `RejectOutside()` a solution outside the boundaries is discarded for good and never enters
+  the buffer (#40). Old elites are always clamped during a remap, so an elite whose
+  descriptor has left the buffer and lies beyond the new boundaries sits in an edge cell
+  with a descriptor outside the reported bounds. A descriptor with a non-finite component
+  throws whatever the policy, before it can reach the buffer, where a remap would sort it.
+  `ThresholdArchive` and `SpreadArchive` cannot wrap it: their thresholds and spreads
+  belong to cells that move.
 - **Fitness values.** Every archive throws an `ArgumentError` for a fitness that is `NaN`
   or infinite, also after conversion to its fitness type (`Float32` overflow), before it
   changes, also inside a batch, as pyribs does (it rejects non-finite objectives and
@@ -910,13 +911,14 @@ None at present.
 Not settled design; the state of the work and the plan agreed with the author.
 
 - **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70) is merged →
-  benchmarks in `Float32` on a device (PR #71) is merged → the author decides on
-  the local branch `fix-sliding-outside` → release PR (0.1.0, `Pkg.add("QualityDiversity")`
-  in README and docs, a `[compat]` entry for Tables) → figures.
-- **`fix-sliding-outside` is not on main.** Commit f5bb1fc ("Widen sliding boundaries to
-  outside descriptors") exists only in the author's local clone. The "Sliding boundaries"
-  decision above describes that branch; on `origin/main` `SlidingBoundariesArchive` still
-  takes `outside`.
+  benchmarks in `Float32` on a device (PR #71) is merged → release PR (0.1.0,
+  `Pkg.add("QualityDiversity")` in README and docs, a `[compat]` entry for Tables) → figures.
+- **`fix-sliding-outside` is dropped for now.** Commit f5bb1fc ("Widen sliding boundaries
+  to outside descriptors"), kept only on that local branch, removes the `outside` keyword
+  of `SlidingBoundariesArchive` and widens the outer boundaries at once to every offered
+  descriptor and, at a remap, to the old elites, so no stored descriptor lies outside the
+  reported bounds. #40 itself is fixed on main (#61). Rebasing it would conflict with the
+  keyword, deduplication and export changes in `sliding.jl`.
 - **#47: PR #70, merged.** Device archives stored
   descriptors in the genotype float type `T`, so with `Float32` genotypes host and device
   could bin a descriptor near a boundary differently. The branch stores them in
