@@ -910,7 +910,7 @@ None at present.
 Not settled design; the state of the work and the plan agreed with the author.
 
 - **Order to 0.1.0.** PR #69 (LM-MA-ES, fixes #45) is merged → #47 (PR #70) is merged →
-  benchmarks in `Float32` on a device (branch `device-float32-benchmarks`, on `main`) → the author decides on
+  benchmarks in `Float32` on a device (PR #71, open) → the author decides on
   the local branch `fix-sliding-outside` → release PR (0.1.0, `Pkg.add("QualityDiversity")`
   in README and docs, a `[compat]` entry for Tables) → figures.
 - **`fix-sliding-outside` is not on main.** Commit f5bb1fc ("Widen sliding boundaries to
@@ -927,7 +927,7 @@ Not settled design; the state of the work and the plan agreed with the author.
   and the docs section "Float32 on a GPU". Full suite passes on release and LTS. The GPU
   comparison (`benchmark/compare/gpu`) is not rerun for it: the author defers that until
   the package is more stable.
-- **Benchmarks in `Float32` on a device: branch `device-float32-benchmarks`.** The
+- **Benchmarks in `Float32` on a device: PR #71 from `device-float32-benchmarks`, open.** The
   scoring of `Rastrigin` and `Sphere` is in `rastrigin(prob, x, T)` and `sphere(prob, x,
   T)`, with every constant converted to `T`; `evaluate` passes `promote_type(Float64,
   eltype(x))` and `device_evaluate`, which only the kernel calls, `float(eltype(x))`. The
