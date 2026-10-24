@@ -947,11 +947,15 @@ Not settled design; the state of the work and the plan agreed with the author.
   split GPU table, then the capability table; one headline figure (CPU MAP-Elites) in the
   README, all figures on the comparison page of the docs, full tables stay in
   `benchmark/compare/README.md`.
-  State: branch `speed-figures` makes every comparison script write one row per timed run
-  to `benchmark/compare/results/*.csv` (`results.jl`/`results.py`), times Julia runs with
-  `@elapsed` after one compiling run, and adds `plot.jl` and `run_all.sh`. Tested on the
-  laptop with short runs only (GPU scripts on the CPU backend), so the server run is the
-  first real one.
+  State (2026-10-24): branch `speed-figures` is pushed with the server run done. It holds
+  the 18 CSV files, the three SVGs, the rewritten tables of `benchmark/compare/README.md`
+  (GPU table split, 8-thread CPU table), the CPU figure in the README and all three in
+  `docs/src/guide/comparison.md`; docs build clean. Not yet done: the PR (text needs the
+  author's approval), then the capability table and the "slow or impossible" sentence
+  (second PR). Found in the run: `DeviceCVTArchive` in `Float32` at batch 10 000 is 15.1 ms
+  against 6.8 ms before #47, because the nearest centroid is now found in `Float64`; the
+  README states the trade-off. Whether to compute in `Float32` and recheck near ties is
+  for the author to decide. The steps below are done; keep them for a future rerun.
 
   **Steps for a session on the server** (the author has asked for these; do them in order
   without asking again, and report at the end):
