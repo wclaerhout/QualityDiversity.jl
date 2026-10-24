@@ -8,7 +8,7 @@
 # Usage:  PYTHON=venv/bin/python benchmark/compare/run_all.sh [cpu|gpu|all]
 #
 # CPU (default 2) is the core of every single-core run and CORES (default 0-7) the eight
-# cores of the threaded runs. The QDax runs on the CPU take about two hours in all.
+# cores of the threaded runs. The CPU runs take about an hour in all, most of it QDax.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -37,9 +37,9 @@ if [[ $what == cpu || $what == all ]]; then
             "${one[@]}" "$PYTHON" compare_cma_qdax.py
     done
     JAX_PLATFORMS=cpu XLA_FLAGS="$xla_one_core" REPEATS=3 \
-        "${one[@]}" "$PYTHON" compare_qdax.py                  # centroid search, about 15 minutes
+        "${one[@]}" "$PYTHON" compare_qdax.py                  # centroid search, about 10 minutes
     JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 XLA_FLAGS="$xla_one_core" REPEATS=3 \
-        "${one[@]}" "$PYTHON" compare_mome_qdax.py             # about 45 minutes
+        "${one[@]}" "$PYTHON" compare_mome_qdax.py             # about 30 minutes
 fi
 
 if [[ $what == gpu || $what == all ]]; then

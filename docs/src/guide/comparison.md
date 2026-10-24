@@ -56,12 +56,18 @@ and CMA-ME on a GPU. Its
 gives the settings, the full results and how to reproduce them. In short, on one CPU
 core:
 
-- MAP-Elites is 2 to 10 times faster than pyribs, most at small batches. It is faster
+- MAP-Elites is 2 to 14 times faster than pyribs, most at small batches. It is faster
   than QDax at batches of 100 and below; at 1000 and above QDax, compiled with JAX and
-  with a grid lookup in place of its centroid search, is level in `float64` and faster
-  in `float32`;
-- CMA-ME is 4 to 6 times faster than pyribs;
+  with a grid lookup in place of its centroid search, is 1.2 to 1.35 times slower in
+  `float64` and 1.3 to 1.7 times faster in `float32`;
+- CMA-ME is 5 to 7 times faster than pyribs and CMA-MAE 6 times;
 - on a GPU, MAP-Elites is level with QDax in `float32`.
+
+![MAP-Elites on one CPU core: time against batch size for QualityDiversity.jl, pyribs and QDax](../assets/speed-map-elites-cpu.svg)
+
+![CMA-ME, CMA-MAE and MOME on one CPU core: median time of each library](../assets/speed-algorithms-cpu.svg)
+
+![MAP-Elites on a GPU: time against batch size for QualityDiversity.jl and QDax](../assets/speed-map-elites-gpu.svg)
 
 The objective in these benchmarks takes nanoseconds, so the numbers measure the library.
 With an expensive objective the evaluation dominates and the libraries differ little.
