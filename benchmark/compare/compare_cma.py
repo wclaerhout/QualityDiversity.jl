@@ -2,7 +2,8 @@
 
 Run:  python compare_cma.py
 The matching scripts are compare_cma.jl (QualityDiversity.jl) and
-compare_cma_qdax.py (QDax); all print the same columns. The problem, archive,
+compare_cma_qdax.py (QDax); all print the same columns and write the timed
+runs to results/ (see results.py). The problem, archive,
 number of emitters, batch size, step size and evaluation budget are the same.
 """
 import os
@@ -14,6 +15,8 @@ import ribs
 from ribs.archives import GridArchive
 from ribs.emitters import EvolutionStrategyEmitter
 from ribs.schedulers import Scheduler
+
+import results
 
 DIM = 20                  # solution dimension
 DIMS = (100, 100)         # archive cells
@@ -90,15 +93,29 @@ if __name__ == "__main__":
     print(f"Python, pyribs {ribs.__version__}, numpy {np.__version__}, {REPEATS} runs per row, budget {BUDGET}")
     print("| method | min s | median s | evals/s (median) | coverage | max fitness | QD score |")
     print("|---|---:|---:|---:|---:|---:|---:|")
+    software = results.software(("pyribs", ribs.__version__), ("numpy", np.__version__))
+    hardware = results.hardware()
+    device, precision, name = "cpu", "float64", "cma-pyribs-cpu"
+    rows = []
     for method in METHODS:
         run_once(method, 0)   # warm up (numba compiles on first use)
-        runs = [run_once(method, seed) for seed in range(1, REPEATS + 1)]
-        times = [r[0] for r in runs]
-        median_time = statistics.median(times)
+        runs = [(seed, *run_once(method, seed)) for seed in range(1, REPEATS + 1)]
+        fastest, median_time, _, _ = results.summary([r[1] for r in runs])
         print(
-            f"| {method} | {min(times):.3f} | {median_time:.3f} "
+            f"| {method} | {fastest:.3f} | {median_time:.3f} "
             f"| {round(BUDGET / median_time)} "
-            f"| {statistics.median(r[1] for r in runs):.3f} "
-            f"| {statistics.median(r[2] for r in runs):.1f} "
-            f"| {statistics.median(r[3] for r in runs):.0f} |"
+            f"| {statistics.median(r[2] for r in runs):.3f} "
+            f"| {statistics.median(r[3] for r in runs):.1f} "
+            f"| {statistics.median(r[4] for r in runs):.0f} |"
         )
+        # "CMA-ME, improvement emitters" is method "CMA-ME" and variant "improvement
+        # emitters" in the CSV file, whose fields hold no commas.
+        short, _, variant = method.partition(", ")
+        rows += [
+            dict(benchmark="cma", library='pyribs', method=short, variant=variant.replace(", ", "; "),
+                 device=device, precision=precision, batch_size=BATCH, searches=EMITTERS, seed=seed,
+                 seconds=seconds, coverage=cov, max_fitness=best, qd_score=score,
+                 software=software, hardware=hardware)
+            for seed, seconds, cov, best, score in runs
+        ]
+    results.write_runs(name, rows)

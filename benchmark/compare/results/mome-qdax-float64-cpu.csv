@@ -1,0 +1,4 @@
+benchmark,library,method,variant,device,precision,threads,batch_size,searches,seed,seconds,coverage,max_fitness,qd_score,global_hypervolume,max_hypervolume,solutions,software,hardware
+mome,QDax,MOME,,cpu,float64,,64,,1,412.8634323151782,0.3225,,15208862.188223176,139953.71250019307,135236.1727162089,1352,Python 3.12.3; QDax 0.5.0; jax 0.11.2 (1802035 with changes),AMD Ryzen Threadripper PRO 5955WX 16-Cores
+mome,QDax,MOME,,cpu,float64,,64,,2,411.4879002920352,0.295,,14099179.043327782,139899.84279196343,135347.51874480888,1387,Python 3.12.3; QDax 0.5.0; jax 0.11.2 (1802035 with changes),AMD Ryzen Threadripper PRO 5955WX 16-Cores
+mome,QDax,MOME,,cpu,float64,,64,,3,414.3829872836359,0.3425,,15923367.338946292,139920.8090069236,135371.75818938453,1352,Python 3.12.3; QDax 0.5.0; jax 0.11.2 (1802035 with changes),AMD Ryzen Threadripper PRO 5955WX 16-Cores

@@ -1,16 +1,15 @@
 # CMA-ME and CMA-MAE on 20-dimensional Rastrigin with QualityDiversity.jl.
 # Run:  julia --threads=1 benchmark/compare/compare_cma.jl
 # The matching scripts are compare_cma.py (pyribs) and compare_cma_qdax.py (QDax);
-# all print the same columns.
+# all print the same columns and write the timed runs to results/ (see results.jl).
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 VERSION < v"1.11" && Pkg.develop(PackageSpec(path=joinpath(@__DIR__, "..", "..")))
 Pkg.instantiate()
 
-using BenchmarkTools
 using QualityDiversity, QualityDiversity.Benchmarks
 using Random: Xoshiro
-using Statistics: median
+include("results.jl")
 
 const DIM = 20                  # solution dimension
 const DIMS = (100, 100)         # archive cells
@@ -53,33 +52,37 @@ const METHODS = (
                     strategy=QualityDiversity.PyribsCMAES),
 )
 
-const seed = Ref(0)
-const finals = []
-
-function benchmark_method(make)
-    empty!(finals)
-    seed[] = 0
-    trial = @benchmark begin
-        result = solve(prob, alg; budget=BUDGET, rng=Xoshiro(seed[]))
-        push!(finals, (coverage=coverage(result.archive),
-                       max_fitness=Float64(max_fitness(result.archive)),
-                       qd_score=qd_score(result.archive; offset=OFFSET)))
-    end setup = (alg = $make(); seed[] += 1) evals = 1 samples = REPEATS seconds = 900
-    return trial, copy(finals)
+# "CMA-ME, improvement emitters" is method "CMA-ME" and variant "improvement emitters" in
+# the CSV file, whose fields hold no commas.
+function method_and_variant(name)
+    parts = split(name, ", "; limit=2)
+    return parts[1], length(parts) == 1 ? "" : replace(parts[2], ", " => "; ")
 end
 
 println("Julia $VERSION, $(Threads.nthreads()) thread(s), $REPEATS runs per row, budget $BUDGET")
 println("| method | min s | median s | evals/s (median) | coverage | max fitness | QD score |")
 println("|---|---:|---:|---:|---:|---:|---:|")
+rows = []
+const SOFTWARE, HARDWARE = software(), hardware()
 for (name, make) in METHODS
-    benchmark_method(make)                        # compile
-    trial, runs = benchmark_method(make)
-    times = trial.times ./ 1e9
+    runs = timed_runs(seed -> solve(prob, make(); budget=BUDGET, rng=Xoshiro(seed)),
+                      result -> (coverage=coverage(result.archive),
+                                 max_fitness=Float64(max_fitness(result.archive)),
+                                 qd_score=Float64(qd_score(result.archive; offset=OFFSET))),
+                      REPEATS)
+    s = summary(runs)
     println("| ", name,
-            " | ", round(minimum(times); digits=3),
-            " | ", round(median(times); digits=3),
-            " | ", round(Int, BUDGET / median(times)),
-            " | ", round(median(r.coverage for r in runs); digits=3),
-            " | ", round(median(r.max_fitness for r in runs); digits=1),
-            " | ", round(Int, median(r.qd_score for r in runs)), " |")
+            " | ", round(s.min; digits=3),
+            " | ", round(s.median; digits=3),
+            " | ", round(Int, BUDGET / s.median),
+            " | ", round(s.stat(r -> r.coverage); digits=3),
+            " | ", round(s.stat(r -> r.max_fitness); digits=1),
+            " | ", round(Int, s.stat(r -> r.qd_score)), " |")
+    method, variant = method_and_variant(name)
+    for r in runs
+        push!(rows, (; benchmark="cma", library="QualityDiversity.jl", method, variant, device="cpu",
+                     precision="float64", threads=Threads.nthreads(), batch_size=BATCH, searches=EMITTERS,
+                     r..., software=SOFTWARE, hardware=HARDWARE))
+    end
 end
+write_runs("cma-qualitydiversity-cpu-t$(Threads.nthreads())", rows)

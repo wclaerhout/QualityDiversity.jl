@@ -106,10 +106,14 @@ and emitters are checked against pyribs and QDax on the same inputs.
 
 ## Speed
 
+![MAP-Elites on one CPU core: time against batch size for QualityDiversity.jl, pyribs and QDax](docs/src/assets/speed-map-elites-cpu.svg)
+
 `benchmark/compare` runs the same problems in QualityDiversity.jl, pyribs and QDax; its
 [README](benchmark/compare/README.md) has the settings and results. On one CPU core,
-MAP-Elites on Rastrigin is 2 to 10 times faster than pyribs and CMA-ME 4 to 6 times
-faster; on a GPU, MAP-Elites is level with QDax.
+MAP-Elites on Rastrigin is 2 to 14 times faster than pyribs and CMA-ME 5 to 7 times
+faster. QDax, with a grid index in place of its centroid search, is faster in `float32`
+from a batch of 1000 up; in `float64` QualityDiversity.jl is faster at every batch size.
+On a GPU, MAP-Elites is level with QDax in `float32`.
 
 ## Documentation
 

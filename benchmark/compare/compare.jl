@@ -1,22 +1,22 @@
 # MAP-Elites on 20-dimensional Rastrigin with QualityDiversity.jl.
 # Run:  julia --threads=1 benchmark/compare/compare.jl
-# The matching pyribs script is compare.py; both print the same columns.
+# The matching pyribs script is compare.py; both print the same columns and write the
+# timed runs to results/ (see results.jl).
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 VERSION < v"1.11" && Pkg.develop(PackageSpec(path=joinpath(@__DIR__, "..", "..")))
 Pkg.instantiate()
 
-using BenchmarkTools
 using QualityDiversity, QualityDiversity.Benchmarks
 using Random: Xoshiro
-using Statistics: median, quantile
+include("results.jl")
 
 const DIM = 20                  # solution dimension
 const DIMS = (100, 100)         # archive cells
 const SIGMA = 0.5               # Gaussian mutation standard deviation
 const BUDGET = 360_000          # evaluations, a multiple of every batch size
 const BATCH_SIZES = (36, 100, 1000, 10_000)
-const REPEATS = 21              # timed runs per batch size, one seed each
+const REPEATS = parse(Int, get(ENV, "REPEATS", "21"))   # timed runs per batch size, one seed each
 
 const OFFSET = 41.0 * DIM       # the same QD-score offset as Rastrigin in Python
 
@@ -63,39 +63,37 @@ problem(::Type{Float32}) = prob32
 reference = QualityDiversity.evaluate(prob, collect(range(-6, 6; length=DIM)))
 println("reference fitness ", reference.fitness, " descriptor ", Tuple(reference.descriptor))
 
-const seed = Ref(0)
-const finals = []           # final statistics of every timed run
-
-function benchmark_batch(T, batch_size)
-    empty!(finals)
-    seed[] = 0
+function timed_batch(T, batch_size)
     p = problem(T)
-    # One timed run per sample (`evals=1`), each with a fresh algorithm and seed.
-    trial = @benchmark begin
-        result = solve($p, alg; budget=BUDGET, rng=Xoshiro(seed[]))
-        push!(finals, (coverage=coverage(result.archive),
-                       max_fitness=Float64(max_fitness(result.archive)),
-                       qd_score=qd_score(result.archive; offset=OFFSET)))
-    end setup = (alg = make_algorithm($T, $batch_size); seed[] += 1) evals = 1 samples = REPEATS seconds = 600
-    return trial, copy(finals)
+    return timed_runs(seed -> solve(p, make_algorithm(T, batch_size); budget=BUDGET, rng=Xoshiro(seed)),
+                      result -> (coverage=coverage(result.archive),
+                                 max_fitness=Float64(max_fitness(result.archive)),
+                                 qd_score=Float64(qd_score(result.archive; offset=OFFSET))),
+                      REPEATS)
 end
 
+rows = []
+const SOFTWARE, HARDWARE = software(), hardware()
 for T in (Float64, Float32)
     println("\nJulia $VERSION, $(Threads.nthreads()) thread(s), $T genotypes, $REPEATS runs per row")
     println("| batch size | min s | median s | middle half s | evals/s (median) | coverage | max fitness | QD score |")
     println("|---:|---:|---:|---:|---:|---:|---:|---:|")
     for batch_size in BATCH_SIZES
-        benchmark_batch(T, batch_size)               # compile
-        trial, runs = benchmark_batch(T, batch_size)
-        times = trial.times ./ 1e9
-        lo, hi = quantile(times, (0.25, 0.75))
+        runs = timed_batch(T, batch_size)
+        s = summary(runs)
         println("| ", batch_size,
-                " | ", round(minimum(times); digits=3),
-                " | ", round(median(times); digits=3),
-                " | ", round(lo; digits=3), "–", round(hi; digits=3),
-                " | ", round(Int, BUDGET / median(times)),
-                " | ", round(median(r.coverage for r in runs); digits=3),
-                " | ", round(median(r.max_fitness for r in runs); digits=1),
-                " | ", round(Int, median(r.qd_score for r in runs)), " |")
+                " | ", round(s.min; digits=3),
+                " | ", round(s.median; digits=3),
+                " | ", round(s.lo; digits=3), "–", round(s.hi; digits=3),
+                " | ", round(Int, BUDGET / s.median),
+                " | ", round(s.stat(r -> r.coverage); digits=3),
+                " | ", round(s.stat(r -> r.max_fitness); digits=1),
+                " | ", round(Int, s.stat(r -> r.qd_score)), " |")
+        for r in runs
+            push!(rows, (; benchmark="map_elites", library="QualityDiversity.jl", method="MAP-Elites",
+                         variant="grid", device="cpu", precision=lowercase(string(T)),
+                         threads=Threads.nthreads(), batch_size, r..., software=SOFTWARE, hardware=HARDWARE))
+        end
     end
 end
+write_runs("map_elites-qualitydiversity-cpu-t$(Threads.nthreads())", rows)

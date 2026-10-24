@@ -8,6 +8,9 @@ Environment variables:
     JAX_ENABLE_X64=1    float64, as in compare_cma.jl and compare_cma.py
     REPEATS=5           timed runs per method (default 11)
 
+The timed runs go to results/ (see results.py), in a file named after the
+precision and the device.
+
 The problem, grid, number of emitters, batch size, step size and evaluation
 budget are those of compare_cma.jl. QDax has the improvement, optimizing and
 random direction emitters of CMA-ME, which it runs one at a time from a pool,
@@ -39,6 +42,8 @@ from qdax.core.emitters.cma_pool_emitter import CMAPoolEmitter
 from qdax.core.emitters.cma_rnd_emitter import CMARndEmitter
 from qdax.core.map_elites import MAPElites
 from qdax.utils.metrics import default_qd_metrics
+
+import results
 
 DIM = 20                  # solution dimension
 DIMS = (100, 100)         # archive cells
@@ -110,16 +115,31 @@ if __name__ == "__main__":
     print(f"QDax {qdax.__version__}, jax {jax.__version__}, {jax.devices()[0]}, {dtype}, {REPEATS} runs per row, budget {BUDGET}")
     print("| method | min s | median s | evals/s (median) | coverage | max fitness | QD score |")
     print("|---|---:|---:|---:|---:|---:|---:|")
+    device, gpu = results.jax_device()
+    software = results.software(("QDax", qdax.__version__), ("jax", jax.__version__))
+    hardware = results.hardware() + (f"; {gpu}" if gpu else "")
+    precision, name = str(dtype), f"cma-qdax-{dtype}-{device}"
+    rows = []
     for method, emitter_class in METHODS.items():
         run = make_run(emitter_class)
         timed(run, 0)   # compile
-        runs = [timed(run, seed) for seed in range(1, REPEATS + 1)]
-        times = [r[0] for r in runs]
-        median_time = statistics.median(times)
+        runs = [(seed, *timed(run, seed)) for seed in range(1, REPEATS + 1)]
+        fastest, median_time, _, _ = results.summary([r[1] for r in runs])
         print(
-            f"| {method} | {min(times):.3f} | {median_time:.3f} "
+            f"| {method} | {fastest:.3f} | {median_time:.3f} "
             f"| {round(BUDGET / median_time)} "
-            f"| {statistics.median(r[1] for r in runs):.3f} "
-            f"| {statistics.median(r[2] for r in runs):.1f} "
-            f"| {statistics.median(r[3] for r in runs):.0f} |"
+            f"| {statistics.median(r[2] for r in runs):.3f} "
+            f"| {statistics.median(r[3] for r in runs):.1f} "
+            f"| {statistics.median(r[4] for r in runs):.0f} |"
         )
+        # "CMA-ME, improvement emitters" is method "CMA-ME" and variant "improvement
+        # emitters" in the CSV file, whose fields hold no commas.
+        short, _, variant = method.partition(", ")
+        rows += [
+            dict(benchmark="cma", library='QDax', method=short, variant=variant.replace(", ", "; "),
+                 device=device, precision=precision, batch_size=BATCH, searches=EMITTERS, seed=seed,
+                 seconds=seconds, coverage=cov, max_fitness=best, qd_score=score,
+                 software=software, hardware=hardware)
+            for seed, seconds, cov, best, score in runs
+        ]
+    results.write_runs(name, rows)
