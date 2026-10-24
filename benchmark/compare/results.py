@@ -80,5 +80,8 @@ def write_runs(name, rows):
 
 def summary(times):
     """Minimum, median and quartiles of the run times."""
-    lo, _, hi = statistics.quantiles(times, n=4, method="inclusive")
+    if len(times) == 1:
+        lo = hi = times[0]
+    else:
+        lo, _, hi = statistics.quantiles(times, n=4, method="inclusive")
     return min(times), statistics.median(times), lo, hi

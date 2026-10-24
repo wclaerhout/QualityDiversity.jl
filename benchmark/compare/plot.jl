@@ -54,7 +54,7 @@ function provenance(rows)
     return "$hardware. Median of $(join(sort(unique(string(n) for n in run_counts(rows))), " or ")) runs; bars span the middle half."
 end
 run_counts(rows) = values(Dict(key => count(==(key), keys_of(rows)) for key in unique(keys_of(rows))))
-keys_of(rows) = [(r["library"], r["variant"], r["precision"], r["batch_size"], r["method"]) for r in rows]
+keys_of(rows) = [(r["library"], r["variant"], r["precision"], r["threads"], r["batch_size"], r["method"]) for r in rows]
 
 # Ticks at 1, 2 and 5 times a power of ten from `lo` to `hi`, written as plain numbers.
 function log_ticks(lo, hi)
@@ -127,7 +127,7 @@ function map_elites_figure(runs, device; title, series_of, name)
                                strokecolor=SURFACE, strokewidth=2)] for s in drawn]
     Legend(fig[2, 1:2], elements, [s.label for s in drawn]; orientation=:horizontal, halign=:left,
            padding=(0, 0, 0, 0), patchsize=(42, 14))
-    Label(fig[4, 1:2], provenance(rows); halign=:left, color=INK.secondary, fontsize=11)
+    Label(fig[4, 1:2], provenance(reduce(vcat, (s.rows for s in drawn))); halign=:left, color=INK.secondary, fontsize=11)
     save_figure(fig, name)
 end
 
