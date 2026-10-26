@@ -179,6 +179,11 @@ end
         @test allocated(QD.add!, archive, xs[1], evs[1]) == 0
         @test allocated(QD.add!, archive, xs[2], Evaluation(evs[2].fitness + 1, evs[2].descriptor, evs[2].phenotype)) == 0
     end
+    # nor with a population large enough to be scored with a tree
+    large = DNSArchive{Int}(1; capacity=200, k=3)
+    QD.add_batch!(large, collect(1:200), [Evaluation(Float64(i % 7), SVector(i / 200)) for i in 1:200])
+    @test length(large) + 1 >= QD.tree_threshold(large)
+    @test allocated(QD.add!, large, 0, Evaluation(3.0, SVector(0.5))) == 0
 end
 
 @testset "DensityArchive inference and allocations" begin
@@ -270,6 +275,18 @@ end
         @test allocated(QD.add!, archive, x, Evaluation(1000.0, far)) == 0           # improvement
         @test allocated(QD.add!, archive, x, Evaluation(2000.0, SVector(60.0, 60.0))) == 0   # new slot, or eviction
     end
+    # nor with a tree, built, searched and rebuilt
+    large = UnstructuredArchive{Int}(1; capacity=300, novelty_threshold=1e-3)
+    for i in 1:300
+        QD.add!(large, i, Evaluation(Float64(i % 5), SVector(i / 300)))
+    end
+    @test large.tree_size > 0
+    bytes = 0
+    for i in 1:200
+        bytes += allocated(QD.add!, large, i, Evaluation(10.0 + i, SVector(i / 200)))
+    end
+    @test bytes == 0
+    @test allocated(QD.cell_index, large, SVector(0.25)) == 0
 end
 
 @testset "CategoricalArchive inference and allocations" begin
