@@ -147,7 +147,7 @@ end
 check_device_pairing(prob, archive) = nothing
 
 function check_device_pairing(prob::AbstractQDProblem, archive::DeviceCellArchive)
-    hasmethod(descriptor_categories, Tuple{typeof(prob)}) &&
+    has_categories(prob) &&
         throw(ArgumentError("a $(nameof(typeof(archive))) needs a problem with descriptor_bounds; one with descriptor_categories runs on the host"))
     return nothing
 end
@@ -163,7 +163,7 @@ function check_gradient_pairing(prob, alg::QDAlgorithm)
         throw(ArgumentError("differentiable quality diversity takes deterministic problems, but $(nameof(typeof(prob))) is stochastic"))
     alg.archive isa DeviceCellArchive &&
         throw(ArgumentError("differentiable quality diversity runs on the host, not on a $(nameof(typeof(alg.archive)))"))
-    hasmethod(descriptor_categories, Tuple{typeof(prob)}) &&
+    has_categories(prob) &&
         throw(ArgumentError("differentiable quality diversity needs real descriptors, but $(nameof(typeof(prob))) has descriptor_categories"))
     return nothing
 end

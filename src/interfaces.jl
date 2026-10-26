@@ -213,15 +213,18 @@ default_genotype(prob::AbstractQDProblem) = typeof(random_solution(Random.Xoshir
 
 Per-dimension `(lo, hi)` bounds of the descriptor space, as a tuple of
 tuples. Archives use them to lay out their cells. Required, unless the problem
-defines [`descriptor_categories`](@ref QualityDiversity.descriptor_categories).
+defines [`descriptor_categories`](@ref QualityDiversity.descriptor_categories); the
+fallback returns `nothing`.
 
     descriptor_bounds(archive::AbstractArchive)
 
 The same for an archive that covers a box of descriptor space, as [`GridArchive`](@ref),
-[`CVTArchive`](@ref) and [`ThresholdArchive`](@ref) do. Optional; the
-[`DirectionRanker`](@ref)s need it.
+[`CVTArchive`](@ref) and [`ThresholdArchive`](@ref) do. Optional; the fallback returns
+`nothing`, for an archive that covers no box. The [`DirectionRanker`](@ref)s need it.
 """
 function descriptor_bounds end
+
+descriptor_bounds(prob::AbstractQDProblem) = nothing
 
 """
     descriptor_categories(prob::AbstractQDProblem)
@@ -231,27 +234,43 @@ tuple, for example `(0:5, [:alkane, :aromatic, :ring])`. A problem that defines
 it returns descriptors as tuples with one entry from each collection, such as
 `(3, :ring)`, and is used with a [`CategoricalArchive`](@ref). Optional: a
 problem with real-valued descriptors defines
-[`descriptor_bounds`](@ref QualityDiversity.descriptor_bounds) instead.
+[`descriptor_bounds`](@ref QualityDiversity.descriptor_bounds) instead, and the
+fallback returns `nothing`, which marks such a problem.
 """
 function descriptor_categories end
 
-# Number of descriptor dimensions, from the categories if the problem has them
-# and from the bounds otherwise.
-function descriptor_ndims(prob::AbstractQDProblem)
-    hasmethod(descriptor_categories, Tuple{typeof(prob)}) && return length(descriptor_categories(prob))
-    return length(descriptor_bounds(prob))
+descriptor_categories(prob::AbstractQDProblem) = nothing
+
+has_categories(prob::AbstractQDProblem) = descriptor_categories(prob) !== nothing
+
+# The descriptor space of `prob`, on which the package dispatches: a `DescriptorCategories`
+# with the values of every dimension, or the tuple of `(lo, hi)` bounds.
+function descriptor_space(prob::AbstractQDProblem)
+    categories = descriptor_categories(prob)
+    categories === nothing || return DescriptorCategories(Tuple(categories))
+    bounds = descriptor_bounds(prob)
+    bounds === nothing &&
+        throw(ArgumentError("$(nameof(typeof(prob))) defines neither descriptor_bounds nor descriptor_categories: define one of them for the problem"))
+    return bounds
 end
 
+# Number of descriptor dimensions.
+descriptor_ndims(prob::AbstractQDProblem) = space_ndims(descriptor_space(prob))
+
+space_ndims(bounds::Tuple) = length(bounds)
+
 # The box of a `(prob; bounds=nothing)` constructor: `bounds` when given, and the
-# `descriptor_bounds` of the problem otherwise. A problem with categories has none, so
-# the error says so instead of the `MethodError` of `descriptor_bounds`.
+# `descriptor_bounds` of the problem otherwise. A problem with categories has none, and
+# the error says what to use instead.
 problem_bounds(prob::AbstractQDProblem, bounds::Tuple) = bounds
 
 function problem_bounds(prob::AbstractQDProblem, ::Nothing)
-    hasmethod(descriptor_bounds, Tuple{typeof(prob)}) && return descriptor_bounds(prob)
-    hasmethod(descriptor_categories, Tuple{typeof(prob)}) &&
+    has_categories(prob) &&
         throw(ArgumentError("$(nameof(typeof(prob))) has descriptor_categories, not descriptor_bounds: its descriptors are labels, which only a CategoricalArchive holds; MAPElites builds one"))
-    throw(ArgumentError("$(nameof(typeof(prob))) does not define descriptor_bounds: define it for the problem, or pass bounds=((lo, hi), ...)"))
+    bounds = descriptor_bounds(prob)
+    bounds === nothing &&
+        throw(ArgumentError("$(nameof(typeof(prob))) does not define descriptor_bounds: define it for the problem, or pass bounds=((lo, hi), ...)"))
+    return bounds
 end
 
 """
@@ -567,6 +586,4 @@ function check_distinct_emitters(emitters::Tuple)
     return nothing
 end
 
-function descriptor_bounds(archive::AbstractArchive)
-    throw(ArgumentError("$(nameof(typeof(archive))) does not report the bounds of its descriptor space"))
-end
+descriptor_bounds(archive::AbstractArchive) = nothing

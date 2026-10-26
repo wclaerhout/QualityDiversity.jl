@@ -51,9 +51,11 @@ struct DescriptorCategories{T<:Tuple}
     values::T
 end
 
+space_ndims(categories::DescriptorCategories) = length(categories.values)
+
 # The descriptor space of `QDProblem` and `StochasticQDProblem`: a tuple of `(lo, hi)`
 # pairs, or a `DescriptorCategories`.
-function descriptor_space(bounds, categories)
+function problem_space(bounds, categories)
     (bounds === nothing) == (categories === nothing) &&
         throw(ArgumentError("give exactly one of bounds and categories"))
     bounds === nothing && return DescriptorCategories(Tuple(categories))
@@ -67,7 +69,7 @@ function descriptor_space(bounds, categories)
 end
 
 QDProblem(f; init, bounds=nothing, categories=nothing) =
-    QDProblem(f, init, descriptor_space(bounds, categories))
+    QDProblem(f, init, problem_space(bounds, categories))
 
 function make_evaluation(space::Tuple, fitness, descriptor, phenotype=nothing)
     N = length(space)

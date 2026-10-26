@@ -48,32 +48,32 @@ function MAPElites(prob::AbstractQDProblem; dims::Union{Tuple,Nothing}=nothing,
                    outside::OutsidePolicy=default_outside(prob),
                    phenotype::Type=Nothing,
                    device::Union{Type,Nothing}=nothing)
-    archive = map_elites_archive(device, Val(has_categories(prob)), prob, dims, bounds, genotype, fitness,
+    archive = map_elites_archive(device, descriptor_space(prob), prob, dims, bounds, genotype, fitness,
                                  outside, phenotype)
     return variation_algorithm(archive; batch_size, variation)
 end
 
-has_categories(prob) = hasmethod(descriptor_categories, Tuple{typeof(prob)})
-
 # The `outside` policy of the algorithm constructors: the nearest cell, as pyribs and
 # QDax do, except for a problem with categories, which cannot be clamped.
-default_outside(prob) = has_categories(prob) ? ThrowOutside() : ClampOutside()
+default_outside(prob::AbstractQDProblem) = default_outside(descriptor_space(prob))
+default_outside(::Tuple) = ClampOutside()
+default_outside(::DescriptorCategories) = ThrowOutside()
 
 # The archive of `MAPElites(prob; ...)`: a grid over the descriptor bounds, on the host or
 # on `device`, or a CategoricalArchive for a problem with descriptor categories.
-function map_elites_archive(device, ::Val{false}, prob, dims, bounds, genotype, fitness, outside, phenotype)
+function map_elites_archive(device, ::Tuple, prob, dims, bounds, genotype, fitness, outside, phenotype)
     dims === nothing &&
         throw(ArgumentError("dims is required for a problem with descriptor_bounds: pass the number of cells along each dimension, e.g. dims=(20, 20)"))
     return grid_archive(prob; dims, bounds, genotype, fitness, outside, phenotype, device)
 end
 
-function map_elites_archive(::Nothing, ::Val{true}, prob, dims, bounds, genotype, fitness, outside, phenotype)
+function map_elites_archive(::Nothing, ::DescriptorCategories, prob, dims, bounds, genotype, fitness, outside, phenotype)
     (dims === nothing && bounds === nothing) ||
         throw(ArgumentError("dims and bounds do not apply to a problem with descriptor_categories; its cells are the combinations of categories"))
     return CategoricalArchive(prob; genotype, fitness, outside, phenotype)
 end
 
-function map_elites_archive(::Type, ::Val{true}, prob, dims, bounds, genotype, fitness, outside, phenotype)
+function map_elites_archive(::Type, ::DescriptorCategories, prob, dims, bounds, genotype, fitness, outside, phenotype)
     throw(ArgumentError("a DeviceGridArchive needs a problem with descriptor_bounds; one with descriptor_categories runs on the host"))
 end
 

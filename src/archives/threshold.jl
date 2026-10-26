@@ -104,9 +104,15 @@ end
 function ThresholdArchive(inner::CellArchive{G,F,D,P}; learning_rate::Real=1.0,
                           threshold_min::Real=-Inf,
                           result::Union{Nothing,CellArchive}=default_result(inner, learning_rate, threshold_min)) where {G,F<:AbstractFloat,D,P}
-    result === nothing || result isa typeof(inner) ||
-        throw(ArgumentError("result must be a $(nameof(typeof(inner))) of the same type as the archive it belongs to, got a $(typeof(result))"))
+    check_result_type(inner, result)
     return ThresholdArchive{G,F,D,P,typeof(inner),typeof(result)}(inner, result, learning_rate, threshold_min)
+end
+
+# The result archive is none, or one of the same type as the archive it belongs to.
+check_result_type(inner::CellArchive, ::Nothing) = nothing
+check_result_type(inner::A, result::A) where {A<:CellArchive} = nothing
+function check_result_type(inner::CellArchive, result)
+    throw(ArgumentError("result must be a $(nameof(typeof(inner))) of the same type as the archive it belongs to, got a $(typeof(result))"))
 end
 
 function ThresholdArchive(::SlidingBoundariesArchive{G,F}; kwargs...) where {G,F<:AbstractFloat}

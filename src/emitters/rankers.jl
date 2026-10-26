@@ -144,6 +144,8 @@ reset_ranker!(rng, ranker::AbstractRanker, archive) = nothing
 
 function reset_ranker!(rng, ranker::DirectionRanker, archive)
     bounds = descriptor_bounds(archive)
+    bounds === nothing &&
+        throw(ArgumentError("$(nameof(typeof(archive))) does not report the bounds of its descriptor space, from which a $(nameof(typeof(ranker))) draws its directions"))
     resize!(ranker.direction, length(bounds))
     for (i, (lo, hi)) in enumerate(bounds)
         ranker.direction[i] = randn(rng) * (hi - lo)

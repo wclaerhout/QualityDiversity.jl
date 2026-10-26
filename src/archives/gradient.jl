@@ -38,10 +38,11 @@ struct GradientArchive{G,F,D,P,A<:AbstractArchive{G,F,D,P}} <: AbstractArchive{G
     end
 end
 
-function GradientArchive(inner::CellArchive{G,F,SVector{N,Float64},P}) where {G,F<:Real,N,P}
-    inner isa SlidingBoundariesArchive &&
-        throw(ArgumentError("a GradientArchive keeps the gradients of the elite of every cell, but a SlidingBoundariesArchive moves its elites when it remaps; wrap a GridArchive or a CVTArchive"))
-    return GradientArchive{G,F,SVector{N,Float64},P,typeof(inner)}(inner)
+GradientArchive(inner::CellArchive{G,F,SVector{N,Float64},P}) where {G,F<:Real,N,P} =
+    GradientArchive{G,F,SVector{N,Float64},P,typeof(inner)}(inner)
+
+function GradientArchive(::SlidingBoundariesArchive{G,F,N}) where {G,F<:Real,N}
+    throw(ArgumentError("a GradientArchive keeps the gradients of the elite of every cell, but a SlidingBoundariesArchive moves its elites when it remaps; wrap a GridArchive or a CVTArchive"))
 end
 
 GradientArchive(inner::ThresholdArchive{G,F,SVector{N,Float64},P}) where {G,F,N,P} =

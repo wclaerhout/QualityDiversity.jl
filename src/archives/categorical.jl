@@ -107,9 +107,10 @@ CategoricalArchive(categories::Tuple; kwargs...) =
 function CategoricalArchive(prob::AbstractQDProblem; genotype::Type=default_genotype(prob),
                            fitness::Type{<:Real}=Float64, outside::OutsidePolicy=ThrowOutside(),
                            phenotype::Type=Nothing)
-    hasmethod(descriptor_categories, Tuple{typeof(prob)}) ||
+    categories = descriptor_categories(prob)
+    categories === nothing &&
         throw(ArgumentError("$(typeof(prob)) defines no descriptor_categories; pass the categories to CategoricalArchive directly"))
-    return CategoricalArchive{genotype,fitness}(descriptor_categories(prob); outside, phenotype)
+    return CategoricalArchive{genotype,fitness}(categories; outside, phenotype)
 end
 
 check_categorical_outside(outside::Union{ThrowOutside,RejectOutside}) = outside

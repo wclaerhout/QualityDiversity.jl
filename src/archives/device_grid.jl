@@ -85,7 +85,7 @@ A [`GridArchive`](@ref) on the host with the cells, bounds, `outside` policy and
 of `archive`, for the functions that need a host archive, such as plotting. Its
 genotypes are `Vector{T}`.
 """
-function GridArchive(archive::DeviceGridArchive{T,F}) where {T,F}
+function GridArchive(archive::DeviceGridArchive{T,F}) where {T<:AbstractFloat,F<:Real}
     host = GridArchive{Vector{T},F}(archive.dims, descriptor_bounds(archive); outside=archive.outside)
     return copy_elites!(host, archive)
 end

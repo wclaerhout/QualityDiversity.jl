@@ -40,8 +40,7 @@ end
 # Tests the descriptor space of `prob` and returns its categories (or `nothing`) and
 # its bounds (or `nothing`).
 function test_descriptor_space(prob)
-    categories = hasmethod(QD.descriptor_categories, Tuple{typeof(prob)}) ?
-                 QD.descriptor_categories(prob) : nothing
+    categories = QD.descriptor_categories(prob)
     bounds = categories === nothing ? QD.descriptor_bounds(prob) : nothing
     if categories === nothing
         @testset "descriptor_bounds" begin
