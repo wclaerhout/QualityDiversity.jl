@@ -119,3 +119,46 @@ end
         end
     end
 end
+
+# Dominated novelty of solution `i` among `fitness` and `points`, from its definition.
+function definition_score(fitness, points, i, k)
+    distances = sort([sqrt(sum(abs2, points[i] - points[j])) for j in eachindex(points)
+                      if j != i && fitness[j] >= fitness[i]])
+    isempty(distances) && return Inf
+    return sum(distances[1:min(k, end)]) / min(k, length(distances))
+end
+
+@testset "DNSArchive scores from a tree, $N dimensions" for N in (1, 2)
+    # more solutions than `16 * 4^N`, so that the archive scores them with a tree; coarse
+    # values make equal fitness and equal descriptors common
+    rng = Xoshiro(N)
+    a = DNSArchive(N; capacity=300, k=3)
+    @test 300 + 40 >= QD.tree_threshold(a)
+    for _ in 1:12
+        fs = round.(randn(rng, 40); digits=1)
+        ds = [Tuple(round.(rand(rng, N); digits=2)) for _ in 1:40]
+        fitness = [[ev.fitness for (_, ev) in QD.elites(a)]; fs]
+        points = [[ev.descriptor for (_, ev) in QD.elites(a)]; [SVector{N,Float64}(d) for d in ds]]
+        stored = length(a)
+        rs = QD.add_batch!(a, dns_batch(fs, ds)...)
+        @test [r.improvement for r in rs] == [definition_score(fitness, points, stored + j, 3) for j in 1:40]
+    end
+end
+
+@testset "a tree and a pass give the same scores" begin
+    for seed in 1:4, N in (1, 3, 6), k in (1, 4)
+        rng = Xoshiro(seed)
+        a = DNSArchive(N; capacity=200, k)
+        merged = rand(rng, 1:400)
+        for v in (a.merged_fitness, a.merged_descriptors, a.tree.order, a.tree.axis, a.tree_boxes, a.tree_max)
+            resize!(v, merged)
+        end
+        digits = rand(rng, 0:2)
+        for m in 1:merged
+            a.merged_fitness[m] = round(randn(rng); digits)
+            a.merged_descriptors[m] = SVector{N}(round.(rand(rng, N); digits=digits + 1))
+        end
+        QD.build_fitness_tree!(a, merged)
+        @test all(m -> QD.dominated_novelty(a, m, merged) === QD.dominated_novelty_scan(a, m, merged), 1:merged)
+    end
+end

@@ -34,9 +34,13 @@ a batch of one solution.
 with the nearest descriptor, or `0` while the archive is empty, and
 [`capacity`](@ref QualityDiversity.capacity) the population size, so `coverage` is the
 fraction of it in use. Descriptors must be finite; a `NaN` or infinite component throws
-an `ArgumentError`. Scoring takes time quadratic in the population plus the batch and
-keeps only `k` distances per solution. `max_fitness` and `mean_fitness` can decrease,
-since a solution can leave the population.
+an `ArgumentError`. With at least `16 * 4^ndims` solutions in the population and the
+batch together, scoring searches a k-d tree of them, built anew for every batch, that
+knows the highest fitness in each of its branches, so a search skips the branches
+without a solution at least as fit; with fewer, where the tree gains nothing, it takes a
+pass over all of them. Both give the same scores. Scoring keeps only `k` distances per
+solution and allocates nothing once the workspace fits the batch. `max_fitness` and
+`mean_fitness` can decrease, since a solution can leave the population.
 
 # Example
 
@@ -66,6 +70,11 @@ mutable struct DNSArchive{G,F<:AbstractFloat,N,P} <: AbstractArchive{G,F,SVector
     const scores::Vector{Float64}
     const order::Vector{Int}
     const kept::Vector{Bool}
+    # k-d tree over `merged_descriptors`, and the bounding box of the descriptors and the
+    # highest fitness in the subtree of each of its positions.
+    const tree::CentroidTree{N}
+    const tree_boxes::Vector{Tuple{SVector{N,Float64},SVector{N,Float64}}}
+    const tree_max::Vector{F}
     # The `k` smallest distances found so far, in increasing order.
     const nearest::Vector{Float64}
 
@@ -75,15 +84,19 @@ mutable struct DNSArchive{G,F<:AbstractFloat,N,P} <: AbstractArchive{G,F,SVector
         k >= 1 || throw(ArgumentError("k must be at least 1, got $k"))
         # sized for `add!`, a batch of one, so that it does not allocate
         merged = capacity + 1
+        merged_descriptors = Vector{SVector{N,Float64}}(undef, merged)
+        tree = CentroidTree{N}(merged_descriptors, Vector{Int}(undef, merged), Vector{Int}(undef, merged))
         return new{G,F,N,P}(k,
                             Vector{F}(undef, capacity),
                             Vector{SVector{N,Float64}}(undef, capacity),
                             Vector{G}(undef, capacity),
                             Vector{P}(undef, capacity),
                             0, 0.0, 0.0, zero(F),
-                            Vector{F}(undef, merged), Vector{SVector{N,Float64}}(undef, merged),
+                            Vector{F}(undef, merged), merged_descriptors,
                             Vector{Float64}(undef, merged), Vector{Int}(undef, merged),
-                            Vector{Bool}(undef, merged), Vector{Float64}(undef, k))
+                            Vector{Bool}(undef, merged), tree,
+                            Vector{Tuple{SVector{N,Float64},SVector{N,Float64}}}(undef, merged), Vector{F}(undef, merged),
+                            Vector{Float64}(undef, k))
     end
 end
 
@@ -183,6 +196,10 @@ function select_population!(archive::DNSArchive{G,F,N,P}, xs, evs) where {G,F,N,
         resize!(archive.scores, merged)
         resize!(archive.order, merged)
         resize!(archive.kept, merged)
+        resize!(archive.tree.order, merged)
+        resize!(archive.tree.axis, merged)
+        resize!(archive.tree_boxes, merged)
+        resize!(archive.tree_max, merged)
     end
     for i in 1:stored
         archive.merged_fitness[i] = archive.fitness[i]
@@ -194,8 +211,15 @@ function select_population!(archive::DNSArchive{G,F,N,P}, xs, evs) where {G,F,N,
         archive.merged_fitness[stored+j] = stored_fitness(F, ev.fitness)
         stored_phenotype(P, ev.phenotype)    # throws before the archive changes
     end
-    for m in 1:merged
-        archive.scores[m] = dominated_novelty(archive, m, merged)
+    if merged >= tree_threshold(archive)
+        build_fitness_tree!(archive, merged)
+        for m in 1:merged
+            archive.scores[m] = dominated_novelty(archive, m, merged)
+        end
+    else
+        for m in 1:merged
+            archive.scores[m] = dominated_novelty_scan(archive, m, merged)
+        end
     end
 
     survivors = min(merged, capacity(archive))
@@ -231,32 +255,103 @@ function select_population!(archive::DNSArchive{G,F,N,P}, xs, evs) where {G,F,N,
     return stored
 end
 
+# The number of solutions from which a tree finds the fitter neighbours faster than a pass
+# over all of them: with fewer than about `16 * 4^N`, a search visits most of the tree.
+tree_threshold(::DNSArchive{G,F,N}) where {G,F,N} = N >= 15 ? typemax(Int) : 16 * 4^N
+
+# Builds the tree over the first `merged` solutions and the highest fitness of each subtree.
+function build_fitness_tree!(archive::DNSArchive, merged)
+    merged == 0 && return nothing
+    order = archive.tree.order
+    for m in 1:merged
+        order[m] = m
+    end
+    build!(order, archive.tree.axis, archive.merged_descriptors, 1, merged, archive.tree_boxes)
+    subtree_max!(archive, 1, merged)
+    return nothing
+end
+
+function subtree_max!(archive::DNSArchive, lo, hi)
+    mid = (lo + hi) >> 1
+    highest = archive.merged_fitness[archive.tree.order[mid]]
+    lo < mid && (highest = max(highest, subtree_max!(archive, lo, mid - 1)))
+    mid < hi && (highest = max(highest, subtree_max!(archive, mid + 1, hi)))
+    archive.tree_max[mid] = highest
+    return highest
+end
+
 # Mean distance from merged solution `i` to its `k` nearest other solutions with fitness
-# at least as high, or `Inf` if there is none.
-function dominated_novelty(archive::DNSArchive, i, merged)
-    nearest = archive.nearest
-    k = length(nearest)
-    count = 0
+# at least as high, or `Inf` if there is none. The `k` smallest distances do not depend
+# on the order in which the tree offers the solutions, and they are summed from the
+# smallest, so the score is the same as that of a pass over all of them.
+dominated_novelty(archive::DNSArchive, i, merged) = mean_nearest(archive, fitter_neighbours!(archive, i, 1, merged, 0))
+
+# The score of `dominated_novelty`, from a pass over all the merged solutions.
+function dominated_novelty_scan(archive::DNSArchive, i, merged)
     fitness = archive.merged_fitness[i]
     point = archive.merged_descriptors[i]
+    count = 0
     for j in 1:merged
         (j == i || archive.merged_fitness[j] < fitness) && continue
-        distance = sqrt(sum(abs2, point - archive.merged_descriptors[j]))
-        count == k && distance >= nearest[k] && continue
-        # insert into the sorted list of the nearest, dropping the farthest if full
-        position = count < k ? (count += 1) : k
-        while position > 1 && nearest[position-1] > distance
-            nearest[position] = nearest[position-1]
-            position -= 1
-        end
-        nearest[position] = distance
+        count = insert_nearest!(archive.nearest, count, sqrt(sum(abs2, point - archive.merged_descriptors[j])))
     end
+    return mean_nearest(archive, count)
+end
+
+# Mean of the first `count` distances of `nearest`, from the smallest, or `Inf` for none.
+function mean_nearest(archive::DNSArchive, count)
     count == 0 && return Inf
     total = 0.0
     for c in 1:count
-        total += nearest[c]
+        total += archive.nearest[c]
     end
     return total / count
+end
+
+# Offers the solutions at positions `lo:hi` of the tree that are at least as fit as merged
+# solution `i` to the list of its nearest, of which there are `count`, and returns the new
+# count.
+function fitter_neighbours!(archive::DNSArchive, i, lo, hi, count)::Int
+    lo > hi && return count
+    mid = (lo + hi) >> 1
+    fitness = archive.merged_fitness[i]
+    archive.tree_max[mid] < fitness && return count
+    nearest = archive.nearest
+    k = length(nearest)
+    point = archive.merged_descriptors[i]
+    # No solution of the subtree is nearer than its bounding box, as computed: rounding is
+    # monotonic, so one at that distance or more cannot enter a full list.
+    lows, highs = archive.tree_boxes[mid]
+    count == k && sqrt(closest_squared(point, lows, highs)) >= nearest[k] && return count
+    j = archive.tree.order[mid]
+    c = archive.merged_descriptors[j]
+    if j != i && archive.merged_fitness[j] >= fitness
+        count = insert_nearest!(nearest, count, sqrt(sum(abs2, point - c)))
+    end
+    lo == hi && return count
+    axis = archive.tree.axis[mid]
+    if point[axis] < c[axis]
+        count = fitter_neighbours!(archive, i, lo, mid - 1, count)
+        count = fitter_neighbours!(archive, i, mid + 1, hi, count)
+    else
+        count = fitter_neighbours!(archive, i, mid + 1, hi, count)
+        count = fitter_neighbours!(archive, i, lo, mid - 1, count)
+    end
+    return count
+end
+
+# Inserts `distance` into the increasing list of the `count` smallest distances, dropping
+# the largest when the list is full, and returns the new count.
+function insert_nearest!(nearest, count, distance)
+    k = length(nearest)
+    count == k && distance >= nearest[k] && return count
+    position = count < k ? (count += 1) : k
+    while position > 1 && nearest[position-1] > distance
+        nearest[position] = nearest[position-1]
+        position -= 1
+    end
+    nearest[position] = distance
+    return count
 end
 
 function refresh_totals!(archive::DNSArchive{G,F}) where {G,F}

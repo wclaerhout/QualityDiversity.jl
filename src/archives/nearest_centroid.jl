@@ -4,7 +4,8 @@
 # the point in the middle of a range is the root of that range, and the ranges
 # on either side are its subtrees. Splitting along the axis of largest spread
 # keeps the tree useful in the handful of dimensions descriptors have. A search
-# allocates nothing.
+# allocates nothing, and neither does `build!`, so the archives whose points
+# change rebuild a tree in place over the first points of its vectors.
 
 struct CentroidTree{N}
     points::Vector{SVector{N,Float64}}   # in the order of the cells
@@ -19,8 +20,10 @@ function CentroidTree(points::Vector{SVector{N,Float64}}) where {N}
     return CentroidTree{N}(points, order, axis)
 end
 
-function build!(order, axis, points::Vector{SVector{N,Float64}}, lo, hi) where {N}
-    lo >= hi && return nothing
+# Arranges `order[lo:hi]` as a tree. With `boxes`, a vector of `(lows, highs)` pairs, the
+# position of the root of every range gets the bounding box of the points of the range.
+function build!(order, axis, points::Vector{SVector{N,Float64}}, lo, hi, boxes=nothing) where {N}
+    lo > hi && return nothing
     lows = points[order[lo]]
     highs = lows
     for k in lo+1:hi
@@ -28,12 +31,53 @@ function build!(order, axis, points::Vector{SVector{N,Float64}}, lo, hi) where {
         lows = min.(lows, p)
         highs = max.(highs, p)
     end
-    split = argmax(highs - lows)
-    sort!(view(order, lo:hi); by=i -> points[i][split])
     mid = (lo + hi) >> 1
+    record_box!(boxes, mid, lows, highs)
+    lo == hi && return nothing
+    split = argmax(highs - lows)
+    select_middle!(order, points, split, lo, mid, hi)
     axis[mid] = split
-    build!(order, axis, points, lo, mid - 1)
-    build!(order, axis, points, mid + 1, hi)
+    build!(order, axis, points, lo, mid - 1, boxes)
+    build!(order, axis, points, mid + 1, hi, boxes)
+    return nothing
+end
+
+record_box!(::Nothing, mid, lows, highs) = nothing
+record_box!(boxes, mid, lows, highs) = (boxes[mid] = (lows, highs); nothing)
+
+# Rearranges `order[lo:hi]` so that no point before position `mid` has a larger coordinate
+# `axis` than the point at `mid`, and none after it a smaller one. Quickselect with a
+# median-of-three pivot and a three-way partition, so that many equal coordinates, as
+# repeated descriptors give, take linear time.
+function select_middle!(order, points, axis, lo, mid, hi)
+    while lo < hi
+        a = points[order[lo]][axis]
+        b = points[order[(lo+hi)>>1]][axis]
+        c = points[order[hi]][axis]
+        pivot = max(min(a, b), min(max(a, b), c))
+        # [lo, below) less than the pivot, [below, i) equal, (above, hi] greater
+        below, i, above = lo, lo, hi
+        while i <= above
+            v = points[order[i]][axis]
+            if v < pivot
+                order[below], order[i] = order[i], order[below]
+                below += 1
+                i += 1
+            elseif v > pivot
+                order[above], order[i] = order[i], order[above]
+                above -= 1
+            else
+                i += 1
+            end
+        end
+        if mid < below
+            hi = below - 1
+        elseif mid > above
+            lo = above + 1
+        else
+            return nothing
+        end
+    end
     return nothing
 end
 
@@ -44,32 +88,37 @@ Index of the point of `tree` closest to `q` in Euclidean distance; the lowest
 index among equally close points.
 """
 function nearest(tree::CentroidTree{N}, q::SVector{N,Float64}) where {N}
-    index, _ = search(tree, q, 1, length(tree.order), 0, Inf)
+    index, _ = search(tree, q, 1, length(tree.order), 0, Inf, Returns(false))
     return index
 end
 
+# The nearest point to `q` among positions `lo:hi` of the tree and the candidate `best` at
+# squared distance `best_distance`, with its squared distance; the lower index on a tie.
+# Points `i` with `skip(i)` are passed over.
 function search(tree::CentroidTree{N}, q::SVector{N,Float64}, lo::Int, hi::Int,
-                best::Int, best_distance::Float64)::Tuple{Int,Float64} where {N}
+                best::Int, best_distance::Float64, skip::S)::Tuple{Int,Float64} where {N,S}
     lo > hi && return (best, best_distance)
     mid = (lo + hi) >> 1
     i = tree.order[mid]
     c = tree.points[i]
-    distance = sum(abs2, c - q)
-    if distance < best_distance || (distance == best_distance && i < best)
-        best, best_distance = i, distance
+    if !skip(i)
+        distance = sum(abs2, c - q)
+        if distance < best_distance || (distance == best_distance && i < best)
+            best, best_distance = i, distance
+        end
     end
     lo == hi && return (best, best_distance)
     axis = tree.axis[mid]
     offset = q[axis] - c[axis]
     if offset < 0
-        best, best_distance = search(tree, q, lo, mid - 1, best, best_distance)
+        best, best_distance = search(tree, q, lo, mid - 1, best, best_distance, skip)
         if offset * offset <= best_distance
-            best, best_distance = search(tree, q, mid + 1, hi, best, best_distance)
+            best, best_distance = search(tree, q, mid + 1, hi, best, best_distance, skip)
         end
     else
-        best, best_distance = search(tree, q, mid + 1, hi, best, best_distance)
+        best, best_distance = search(tree, q, mid + 1, hi, best, best_distance, skip)
         if offset * offset <= best_distance
-            best, best_distance = search(tree, q, lo, mid - 1, best, best_distance)
+            best, best_distance = search(tree, q, lo, mid - 1, best, best_distance, skip)
         end
     end
     return (best, best_distance)

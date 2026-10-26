@@ -203,3 +203,47 @@ end
     @test sort(first.(collect(QD.elites(a)))) == [[1.0], [3.0], [5.0]]
     @test a.genotypes[2] == [5.0]
 end
+
+# The rules of `UnstructuredArchive` written out over plain vectors, one solution at a time.
+function unstructured_rules!(slots, capacity, threshold, f, d)
+    distances = [sum(abs2, d - s[2]) for s in slots]
+    nearest = isempty(slots) ? 0 : argmin(distances)    # the first on a tie
+    if nearest == 0 || distances[nearest] > threshold^2
+        length(slots) < capacity && (push!(slots, (f, d)); return QD.NewCell)
+        # `<`, not `argmin`: -0.0 and 0.0 are equally weak, and the first of them goes
+        weakest = 1
+        for i in eachindex(slots)
+            slots[i][1] < slots[weakest][1] && (weakest = i)
+        end
+        f > slots[weakest][1] || return QD.Rejected
+        slots[weakest] = (f, d)
+        return QD.NewCell
+    end
+    f > slots[nearest][1] || return QD.Rejected
+    slots[nearest] = (f, d)
+    return QD.Improved
+end
+
+@testset "UnstructuredArchive with a tree, $N dimensions" for N in (1, 2)
+    # more stored solutions than `16 * 4^N`, so that the archive searches a tree, and
+    # enough of them replaced that it rebuilds it; coarse values make ties common
+    rng = Xoshiro(N)
+    capacity = 400
+    threshold = N == 1 ? 0.002 : 0.02
+    digits = N == 1 ? 3 : 2
+    a = UnstructuredArchive(N; capacity, novelty_threshold=threshold)
+    @test capacity > QD.tree_threshold(a)
+    slots = Tuple{Float64,SVector{N,Float64}}[]
+    for _ in 1:3000
+        f = round(randn(rng); digits=1)
+        d = SVector{N,Float64}(round.(rand(rng, N); digits))
+        @test QD.add!(a, [f], Evaluation(f, d)).status == unstructured_rules!(slots, capacity, threshold, f, d)
+        q = SVector{N,Float64}(round.(rand(rng, N); digits))
+        @test QD.cell_index(a, q) == argmin([sum(abs2, q - s[2]) for s in slots])
+    end
+    @test a.tree_size > 0
+    @test [(ev.fitness, ev.descriptor) for (_, ev) in QD.elites(a)] == slots
+    empty!(a)
+    @test length(a) == 0 && a.tree_size == 0 && a.num_pending == 0
+    @test QD.add!(a, [1.0], Evaluation(1.0, zero(SVector{N,Float64}))).status == QD.NewCell
+end
