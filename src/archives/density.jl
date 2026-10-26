@@ -25,7 +25,9 @@ while the buffer is empty. `bandwidth` has no default; the paper finds about 5% 
 width of descriptor space a good start. A result has the status that `inner` gives the
 solution and `improvement = -density`, so that [`ImprovementRanker`](@ref) ranks the
 lowest density first. Every result of a batch is computed against the buffer as it was
-before the batch.
+before the batch. A density takes time linear in the buffer; [`add_batch!`](@ref
+QualityDiversity.add_batch!) computes those of a batch on several threads when the batch
+is large enough to pay for them, with the same results whatever the number of threads.
 
 [`result_archive`](@ref QualityDiversity.result_archive) returns `inner`, and `length`,
 `capacity`, `cell_index`, `sample_elites`, `elites`, `descriptor_bounds` and the
@@ -120,7 +122,10 @@ empty. See [`DensityArchive`](@ref). Throws an `ArgumentError` if `d` has the wr
 of dimensions or a component that is not finite, which would make every later density
 `NaN` once in the buffer.
 """
-function density(archive::DensityArchive{G,F,N}, d::AbstractVector{<:Real}) where {G,F,N}
+density(archive::DensityArchive, d::AbstractVector{<:Real}) = kernel_density(archive, density_point(archive, d))
+
+# `d` as an `SVector`, after checking its dimension and that it is finite.
+function density_point(::DensityArchive{G,F,N}, d::AbstractVector{<:Real}) where {G,F,N}
     length(d) == N ||
         throw(ArgumentError("descriptor has $(length(d)) dimensions but the archive has $N"))
     point = SVector{N,Float64}(d)
@@ -128,6 +133,11 @@ function density(archive::DensityArchive{G,F,N}, d::AbstractVector{<:Real}) wher
         isfinite(point[i]) ||
             throw(ArgumentError("descriptor component $i is $(point[i]), which is not finite"))
     end
+    return point
+end
+
+# The density at `point`, its terms added in the order of the buffer.
+function kernel_density(archive::DensityArchive, point)
     archive.filled == 0 && return 0.0
     h = archive.bandwidth
     total = 0.0
@@ -145,7 +155,12 @@ function add!(archive::DensityArchive{G,F}, x, ev::Evaluation{<:Real}) where {G,
 end
 
 function add_batch!(archive::DensityArchive{G,F}, xs::AbstractVector, evs::AbstractVector) where {G,F}
-    improvements = [-convert(F, density(archive, ev.descriptor)) for ev in evs]
+    points = [density_point(archive, ev.descriptor) for ev in evs]    # throws before any change
+    densities = Vector{Float64}(undef, length(points))
+    # Each density is summed on one thread in the order of the buffer, so the number of
+    # threads changes no result.
+    evaluate_each!(j -> kernel_density(archive, points[j]), densities)
+    improvements = [-convert(F, d) for d in densities]
     results = add_batch!(archive.inner, xs, evs)
     for ev in evs
         remember!(archive, ev.descriptor)
