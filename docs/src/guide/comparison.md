@@ -7,7 +7,7 @@ CurrentModule = QualityDiversity
 [pyribs](https://pyribs.org) and [QDax](https://github.com/adaptive-intelligent-robotics/QDax)
 are the two main quality-diversity libraries in Python. This package offers most of
 their algorithms, under the names below, and checks several of them against those
-libraries on the same inputs (`test/reference`).
+libraries on the same inputs (`test/reference`; see [Verification](verification.md)).
 
 ## Names
 

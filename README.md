@@ -101,8 +101,10 @@ works through a complete example.
 | Metrics | QD score, coverage, continuous QD score, hypervolume and MOQD score |
 | Extensions | Makie plots (heatmaps, scatter, ECDF, CQD curve); archives as Tables.jl tables; MAP-Elites and CMA-ME with the archive on a GPU; gradients by ForwardDiff |
 
-Every run is reproducible from its seed, also with threaded evaluation. Several archives
-and emitters are checked against pyribs and QDax on the same inputs.
+Every run is reproducible from its seed, also with threaded evaluation. Archives,
+variation operators, emitters and metrics are checked against pyribs, QDax and the papers
+on the same inputs; the [verification page](https://wclaerhout.github.io/QualityDiversity.jl/dev/guide/verification/)
+lists each check and where the results differ.
 
 ## Speed
 

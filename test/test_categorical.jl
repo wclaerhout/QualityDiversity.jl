@@ -1,3 +1,5 @@
+include("reference/categorical.jl")
+
 @testset "CategoricalArchive construction" begin
     a = CategoricalArchive((0:3, [20, 10]))
     @test a isa CategoricalArchive{Vector{Float64},Float64,Tuple{Int,Int}}
@@ -163,4 +165,29 @@ end
               budget=2_000, rng=Xoshiro(1))
     @test length(r.archive) == 49
     @test eltype(first.(QD.elites(r.archive))) == Vector{Float64}
+end
+
+@testset "CategoricalArchive matches pyribs" begin
+    # reference/categorical.jl: the statuses, improvements, elites and metrics of pyribs's
+    # CategoricalArchive after each batch of a sequence
+    pyribs_status = Dict(0 => QD.Rejected, 1 => QD.Improved, 2 => QD.NewCell)
+    c = categorical_case
+    a = CategoricalArchive(c.categories)
+    descriptor(i) = (c.categories[1][c.first[i]+1], c.categories[2][c.second[i]+1])
+    numbers(a) = sort([Int(only(x)) for (x, _) in QD.elites(a)])
+    statuses, values = QD.AddStatus[], Float64[]
+    for b in 1:length(c.fitness)÷c.batch
+        ids = (b-1)*c.batch+1:b*c.batch
+        rs = QD.add_batch!(a, [[Float64(i)] for i in ids], [Evaluation(c.fitness[i], descriptor(i)) for i in ids])
+        append!(statuses, [r.status for r in rs])
+        append!(values, [r.improvement for r in rs])
+        @test numbers(a) == c.elites[b]
+        elites, cov, score, best, average = c.stats[:, b]
+        @test length(a) == elites && coverage(a) ≈ cov
+        @test qd_score(a; offset=-c.offset) ≈ score rtol = 1e-12
+        @test max_fitness(a) == best
+        @test mean_fitness(a) ≈ average rtol = 1e-12
+    end
+    @test statuses == [pyribs_status[s] for s in c.statuses]
+    @test values ≈ c.values rtol = 1e-12
 end

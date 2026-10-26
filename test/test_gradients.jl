@@ -1,8 +1,10 @@
 using ForwardDiff: ForwardDiff
 using LinearAlgebra: norm
+using Random: Random, AbstractRNG
 using QualityDiversity.Testing: test_emitter
 
 include("reference/mega.jl")
+include("reference/omg.jl")
 
 # A smooth problem with two linear descriptors; ForwardDiff differentiates it.
 smooth_problem(dim) = QDProblem(x -> (-sum(abs2, x .- 0.5) + sin(x[1]), (2tanh(sum(x[1:dim÷2]) / (dim ÷ 2)), 2tanh(x[end])));
@@ -309,3 +311,41 @@ end
         @test_throws message init(bad, OMGMEGA(bad; dims=(4, 4), sigma0=1.0); budget=100)
     end
 end
+
+# Draws scripted for GradientOperatorEmitter: `rand(rng, cells)` gives the next cell and
+# `randn(rng)` the next coefficient.
+struct ScriptedDraws <: AbstractRNG
+    cells::Vector{Int}
+    coefficients::Vector{Float64}
+end
+Base.rand(r::ScriptedDraws, ::AbstractVector{Int}) = popfirst!(r.cells)
+Random.randn(r::ScriptedDraws) = popfirst!(r.coefficients)
+Random.randn(r::ScriptedDraws, ::Type{Float64}) = popfirst!(r.coefficients)
+
+@testset "GradientOperatorEmitter matches pyribs and QDax" begin
+    # reference/omg.jl: the children that pyribs's GradientOperatorEmitter (with sigma=0,
+    # so that it adds no noise to the parents) and QDax's OMGMEGAEmitter make from known
+    # parents and coefficients
+    function evaluate(x)
+        d = tanh.(omg_A * x)
+        J = zeros(3, 5)
+        J[1, :] = -2 .* (x .- omg_center)
+        J[1, 1] += cos(x[1])
+        J[2:3, :] = (1 .- d .^ 2) .* omg_A
+        return Evaluation(-sum(abs2, x .- omg_center) + sin(x[1]), SVector{2}(d)), J
+    end
+    archive = GradientArchive(GridArchive((5, 5), ((-1, 1), (-1, 1))))
+    for x in eachcol(omg_population)
+        ev, J = evaluate(collect(x))
+        QD.add!(archive, collect(x), ev, J)
+    end
+    cells = archive.inner
+    for (ref, rtol) in ((omg_pyribs, 1e-12), (omg_qdax, 1e-7))   # QDax adds no 1e-8 to the length
+        parents = [findfirst(i -> cells.occupied[i] && cells.genotypes[i] == p, eachindex(cells.genotypes))
+                   for p in eachcol(ref.parents)]
+        emitter = GradientOperatorEmitter(; sigma0=ref.sigma, batch_size=length(parents))
+        children = QD.ask(ScriptedDraws(parents, vec(ref.coefficients)), emitter, archive)
+        @test reduce(hcat, children) ≈ ref.children rtol = rtol
+    end
+end
+

@@ -1,3 +1,5 @@
+include("reference/cma_emitter.jl")
+
 result(status, improvement) = QD.AddResult(status, Float64(improvement))
 fit(f) = Evaluation(f, SVector(0.5, 0.5))
 
@@ -377,4 +379,57 @@ end
     @test CMAEmitter(10; sigma0=1, strategy=QD.OpenAIES).es.batch_size == 2 * cld(4 + floor(Int, 3 * log(10)), 2)
     @test_throws "strategy must construct an AbstractEvolutionStrategy, got a Int64" CMAEmitter(3; sigma0=1, strategy=(dim; kwargs...) -> 1)
     @test CMAME(Sphere(10); dims=(4, 4), sigma0=1.0, strategy=QD.SepCMAES).emitters[1] isa CMAEmitter{<:Any,<:Any,<:Any,QD.SepCMAES}
+end
+
+# An evolution strategy that returns the scripted batches of reference/cma_emitter.jl and
+# records the ranking and the number of parents it is told.
+mutable struct ScriptedCandidates <: QD.AbstractEvolutionStrategy
+    dim::Int
+    batch_size::Int
+    x::Matrix{Float64}
+    lower::Vector{Float64}
+    upper::Vector{Float64}
+    told::Vector{Tuple{Vector{Int},Int}}
+end
+ScriptedCandidates() = ScriptedCandidates(4, 8, zeros(4, 8), fill(-Inf, 4), fill(Inf, 4), Tuple{Vector{Int},Int}[])
+QD.reset!(es::ScriptedCandidates, x0) = es
+QD.sample!(rng, es::ScriptedCandidates) = (es.x .= cma_emitter_samples[length(es.told)+1]; es)
+QD.update!(es::ScriptedCandidates, order, parents) = (push!(es.told, (collect(order), Int(parents))); es)
+QD.should_stop(es::ScriptedCandidates, keys) = false
+
+@testset "CMAEmitter matches pyribs: $(c.ranker), $(c.selection), $(c.restart)$(c.integer ? ", integer fitness" : "")" for c in cma_emitter_cases
+    # reference/cma_emitter.jl: the statuses, rankings, parent counts and restarts of
+    # pyribs's EvolutionStrategyEmitter over scripted rounds. Candidates whose ranking
+    # keys are equal are ordered differently: pyribs puts the later one first (the
+    # objective ranker in an arbitrary order), CMAEmitter the earlier one, so a ranking
+    # is compared by its keys and, in a round without ties, as an order.
+    rankers = Dict("2imp" => QD.TwoStageImprovementRanker(), "imp" => QD.ImprovementRanker(),
+                   "obj" => QD.ObjectiveRanker(), "2obj" => QD.TwoStageObjectiveRanker(),
+                   "rd" => QD.RandomDirectionRanker(), "2rd" => QD.TwoStageRandomDirectionRanker())
+    restart = c.restart isa Integer ? QD.PeriodicRestart(c.restart) :
+              c.restart == "basic" ? QD.ConvergenceRestart() : QD.NoImprovementRestart()
+    selection = c.selection == "mu" ? QD.MuSelection() : QD.FilterSelection()
+    function evaluate(x)
+        f = -sum(abs2, x .- cma_emitter_center)
+        return Evaluation(c.integer ? round(f) : f, SVector(2tanh((x[1] + x[2]) / 2), 2tanh((x[3] + x[4]) / 2)))
+    end
+    status_code = Dict(QD.Rejected => 0, QD.Improved => 1, QD.NewCell => 2)
+    a = GridArchive((6, 6), ((-2, 2), (-2, 2)))
+    emitter = CMAEmitter(4; sigma0=1.0, batch_size=8, x0=zeros(4), strategy=(dim; kwargs...) -> ScriptedCandidates(),
+                         ranker=rankers[c.ranker], selection, restart)
+    for r in eachindex(cma_emitter_samples)
+        xs = QD.ask(Xoshiro(r), emitter, a)
+        emitter.ranker isa QD.DirectionRanker &&
+            (emitter.ranker.direction .= cma_emitter_directions[QD.restarts(emitter)+1])
+        evs = evaluate.(xs)
+        rs = QD.add_batch!(a, xs, evs)
+        keys = [QD.rank_key(emitter.ranker, ev, res) for (ev, res) in zip(evs, rs)]
+        QD.tell!(emitter, xs, evs, rs)
+        order, parents = emitter.es.told[end]
+        @test [status_code[res.status] for res in rs] == c.statuses[r]
+        @test parents == c.parents[r]
+        @test QD.restarts(emitter) == c.restarts[r]
+        @test keys[order] == keys[c.orders[r]]
+        allunique(keys) && @test order == c.orders[r]
+    end
 end

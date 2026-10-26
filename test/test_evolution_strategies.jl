@@ -1,6 +1,7 @@
 using LinearAlgebra: norm, dot
 
 include("reference/strategies.jl")
+include("reference/pyribs_strategies.jl")
 
 # Batch `X` (one solution per column) given as the flat vector of the reference file.
 columns(flat, dim) = reshape(flat, dim, :)
@@ -158,6 +159,12 @@ end
     @test es.sigma ≈ lm_sigma rtol = 1e-10
     @test es.path_sigma ≈ lm_ps rtol = 1e-10
     @test vec(es.vectors) ≈ lm_M rtol = 1e-10
+    # pyribs's LMMAEvolutionStrategy, given the same batches, ends in the same state
+    # (reference/pyribs_strategies.jl)
+    @test es.mean ≈ pyribs_lm.mean rtol = 1e-10
+    @test es.sigma ≈ pyribs_lm.sigma rtol = 1e-10
+    @test es.path_sigma ≈ pyribs_lm.path_sigma rtol = 1e-10
+    @test vec(es.vectors) ≈ pyribs_lm.vectors rtol = 1e-10
     @test es.generation == 3
 
     # the first batch is the plain normal draw, and later ones are stretched along the vectors
@@ -196,6 +203,7 @@ end
         QD.update!(es, oa_orders[g], 4)
     end
     @test es.theta ≈ oa_theta rtol = 1e-10
+    @test es.theta ≈ pyribs_openai.theta rtol = 1e-10   # pyribs's OpenAIEvolutionStrategy
     @test es.steps == 3
 
     # the batch consists of mirrored pairs around the center

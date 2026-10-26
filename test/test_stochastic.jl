@@ -1,3 +1,5 @@
+include("reference/sampling.jl")
+
 noisy_fitness(rng, x) = -sum(abs2, x) + 5 * randn(rng)
 
 function noisy_problem(; sigma=5.0, dim=4)
@@ -142,4 +144,24 @@ end
     # the CMA emitters use the same loop
     cma = solve(prob, CMAME(prob; dims=(6, 6), sigma0=0.5, num_emitters=2, batch_size=8); budget=1_000, rng=Xoshiro(1))
     @test cma.n_evals >= 1_000 && length(cma.archive) > 1
+end
+
+@testset "Sampled matches QDax's average and median" begin
+    # reference/sampling.jl: QDax's `average` and `median` of fixed samples of the
+    # fitness and the descriptor. The wrapped problem hands out the samples of a solution
+    # in order; the solution is its number.
+    for c in sampling_cases, (rule, fitness, descriptor) in
+            ((QD.Average(), c.average_fitness, c.average_descriptor), (QD.Median(), c.median_fitness, c.median_descriptor))
+        k = size(c.fitness, 1)
+        drawn = zeros(Int, size(c.fitness, 2))
+        inner = StochasticQDProblem(function (rng, x)
+                                        i = Int(x[1])
+                                        s = drawn[i] += 1
+                                        return c.fitness[s, i], (c.descriptors[1, s, i], c.descriptors[2, s, i])
+                                    end; init=rng -> [1.0], bounds=((0, 1), (0, 1)))
+        evs = [QD.evaluate(Xoshiro(0), Sampled(inner; num_samples=k, expectation=rule), [Float64(i)])
+               for i in axes(c.fitness, 2)]
+        @test [e.fitness for e in evs] ≈ fitness rtol = 1e-14
+        @test reduce(hcat, [collect(e.descriptor) for e in evs]) ≈ descriptor rtol = 1e-14
+    end
 end

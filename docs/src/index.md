@@ -100,3 +100,4 @@ prob = Sphere(20)
 - [Concepts](guide/concepts.md) explains the parts of the package and how a run proceeds.
 - [Choosing an algorithm](guide/algorithms.md) compares the algorithms and archives.
 - [Coming from pyribs or QDax](guide/comparison.md) maps their names to this package.
+- [Verification](guide/verification.md) lists how each component is checked against pyribs, QDax and the papers.

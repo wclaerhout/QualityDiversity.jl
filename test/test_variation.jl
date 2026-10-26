@@ -1,3 +1,5 @@
+include("reference/variation.jl")
+
 using OffsetArrays: OffsetArray
 
 @testset "GaussianMutation" begin
@@ -244,4 +246,62 @@ end
     @test_throws "σ must be positive and finite, got Inf" GaussianMutation(Inf)
     @test_throws "σ_iso must be non-negative and finite, got Inf" IsoLineVariation(Inf, 0.1)
     @test_throws "σ_line must be non-negative and finite, got NaN" IsoLineVariation(0.1, NaN)
+end
+
+@testset "PolynomialMutation matches pymoo" begin
+    # reference/variation.jl: children of pymoo's mut_pm for fixed parents and uniform
+    # draws; `polynomial_step` is the step that `vary` takes for one such draw
+    child(x, lo, hi, eta, u) = clamp(x + QD.polynomial_step(x, lo, hi, eta, u), lo, hi)
+    for c in pymoo_polynomial_cases
+        @test child.(c.x, c.lower, c.upper, c.eta, c.u) ≈ c.child rtol = 1e-13
+    end
+    # QDax's polynomial_mutation takes (x - lo) / span where Deb and pymoo take
+    # 1 - (x - lo) / span, and draws its uniforms in Float32
+    q = qdax_polynomial_case
+    function qdax_child(x, u)
+        span = q.upper - q.lower
+        d1, d2, p = (x - q.lower) / span, (q.upper - x) / span, 1 / (q.eta + 1)
+        step = u < 0.5 ? (2u + d1^(q.eta + 1) * (1 - 2u))^p - 1 : 1 - (2(1 - u) + 2d2^(q.eta + 1) * (u - 0.5))^p
+        return clamp(x + step * span, q.lower, q.upper)
+    end
+    @test qdax_child.(q.x, q.u) ≈ q.child rtol = 1e-6
+    @test !(child.(q.x, q.lower, q.upper, q.eta, q.u) ≈ q.child)
+end
+
+@testset "Gaussian and iso+line children are distributed as in pyribs and QDax" begin
+    # reference/variation.jl: per entry the mean, standard deviation and 10% and 90%
+    # quantiles of 200 000 children of fixed parents, and the correlation of the first
+    # two entries
+    p1, p2 = variation_parents
+    n = 200_000
+    rng = Xoshiro(9)
+    gaussian = reduce(hcat, [QD.vary(rng, GaussianMutation(0.1), p1) for _ in 1:n])
+    isoline = reduce(hcat, [QD.vary(rng, IsoLineVariation(0.05, 0.3), p1, p2) for _ in 1:n])
+    average(v) = sum(v) / length(v)
+    deviation(v) = sqrt(sum(abs2, v .- average(v)) / length(v))
+    quantile(v, q) = sort(v)[round(Int, q * length(v))]
+    function similar_distribution(children, ref)
+        rows = [children[j, :] for j in axes(children, 1)]
+        means, sds = average.(rows), deviation.(rows)
+        a, b = rows[1] .- means[1], rows[2] .- means[2]
+        correlation = average(a .* b) / (sds[1] * sds[2])
+        return all(abs.(means .- ref.mean) .<= 0.02 .* ref.std) &&
+               all(abs.(sds .- ref.std) .<= 0.01 .* ref.std) &&
+               all(abs.(quantile.(rows, 0.1) .- ref.q10) .<= 0.01) &&
+               all(abs.(quantile.(rows, 0.9) .- ref.q90) .<= 0.01) &&
+               abs(correlation - ref.cor12) <= 0.01
+    end
+    @test similar_distribution(gaussian, variation_statistics.pyribs_gaussian)
+    @test similar_distribution(isoline, variation_statistics.pyribs_isoline)
+    @test similar_distribution(isoline, variation_statistics.qdax_isoline)
+end
+
+@testset "UniformCrossover and QDax's polynomial_crossover" begin
+    # QDax copies floor(proportion * n) positions drawn with replacement, so with
+    # proportion 0.5 and 10 entries it changes 1 - 0.9^5 of them; UniformCrossover takes
+    # each entry from the second parent with probability 0.5
+    rng = Xoshiro(1)
+    taken = sum(sum(QD.vary(rng, UniformCrossover(0.5), zeros(10), ones(10))) for _ in 1:200_000) / 2_000_000
+    @test taken ≈ 0.5 atol = 0.005
+    @test qdax_crossover_fraction ≈ 1 - 0.9^5 atol = 0.005
 end
