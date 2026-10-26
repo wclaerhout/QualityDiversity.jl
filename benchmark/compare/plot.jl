@@ -169,9 +169,9 @@ struct AlgorithmPanel
     selects::Vector{Pair{String,Function}}
 end
 
-# The runs of one setting with a batch size of 10 000 on the GPU, in float32.
-gpu_map_elites(variant) = r -> matches(r; benchmark="map_elites", device="gpu", precision="float32",
-                                      batch_size="10000", variant)
+# The runs of one setting with a batch size of 10 000 on the GPU.
+gpu_map_elites(variant, precision) = r -> matches(r; benchmark="map_elites", device="gpu", precision,
+                                                 batch_size="10000", variant)
 
 const CPU_PANELS = [
     AlgorithmPanel("MAP-Elites, batch 10 000",
@@ -191,10 +191,10 @@ const CPU_PANELS = [
 ]
 
 const GPU_PANELS = [
-    AlgorithmPanel("MAP-Elites, grid, batch 10 000",
-                   ["QualityDiversity.jl" => gpu_map_elites("grid"), "QDax" => gpu_map_elites("grid index")]),
-    AlgorithmPanel("MAP-Elites, CVT, batch 10 000",
-                   ["QualityDiversity.jl" => gpu_map_elites("cvt"), "QDax" => gpu_map_elites("centroid search")]),
+    AlgorithmPanel("MAP-Elites, $archive, $precision",
+                   ["QualityDiversity.jl" => gpu_map_elites(ours, precision), "QDax" => gpu_map_elites(qdax, precision)])
+    for precision in ("float32", "float64")
+    for (archive, ours, qdax) in (("grid", "grid", "grid index"), ("CVT", "cvt", "centroid search"))
 ]
 
 # Draws one bar per library on `ax`, from zero to the median, with a line over the middle
@@ -225,10 +225,10 @@ function algorithm_panel!(ax, runs, panel)
 end
 
 # Median time of every algorithm measured, one panel per algorithm with its own linear axis
-# from zero and one bar per library: on one CPU core in float64 in the top row, on the GPU in
-# float32 below.
+# from zero and one bar per library: on one CPU core in float64 in the top row, MAP-Elites on
+# the GPU in both precisions below.
 function algorithms_figure(runs; name)
-    rows_of_panels = (("CPU, one core, float64", CPU_PANELS), ("GPU, float32", GPU_PANELS))
+    rows_of_panels = (("CPU, one core, float64", CPU_PANELS), ("GPU, batch 10 000", GPU_PANELS))
     ncols = maximum(length(panels) for (_, panels) in rows_of_panels)
     fig = Figure(size=(880, 640))
     Label(fig[1, 1:ncols], "Time of each algorithm"; halign=:left, font=:bold, fontsize=15, tellwidth=false)
