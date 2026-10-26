@@ -1,6 +1,8 @@
 # Calls on the hot path infer a concrete type and, for isbits genotypes, do not
 # allocate. Measurements are taken inside functions after a warm-up call.
 
+using Profile: Profile
+
 function allocated(f::F, args::Vararg{Any,N}) where {F,N}
     f(args...)
     return @allocated f(args...)
@@ -101,6 +103,26 @@ end
     end
 end
 
+# Logs the type, size and call stack of every allocation in one update of `es`, for a
+# strategy whose update allocates.
+function report_allocations(strategy, es, order, rng)
+    c = deepcopy(es)
+    QD.sample!(rng, c)
+    parents = c.batch_size ÷ 2
+    Profile.Allocs.clear()
+    Profile.Allocs.@profile sample_rate=1 QD.update!(c, order, parents)
+    allocs = Profile.Allocs.fetch().allocs
+    Profile.Allocs.clear()
+    for a in allocs
+        # Julia frames from the allocation up to this function
+        stop = something(findfirst(f -> f.func === :report_allocations, a.stacktrace), lastindex(a.stacktrace))
+        frames = [f for f in a.stacktrace[begin:stop-1] if !f.from_c]
+        @info "$(nameof(strategy)) update! allocates $(a.size) bytes of $(a.type)" *
+              join(("\n  " * sprint(show, f) for f in frames))
+    end
+    isempty(allocs) && @info "$(nameof(strategy)) update! allocates nothing under Profile.Allocs"
+end
+
 @testset "evolution-strategy updates do not allocate" begin
     for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100))
         es = strategy(dim; sigma0=0.5)
@@ -129,6 +151,7 @@ end
         end
         @test checked > 0
         @test (nameof(strategy), allocating) == (nameof(strategy), [])
+        isempty(allocating) || report_allocations(strategy, es, order, rng)
     end
 end
 
