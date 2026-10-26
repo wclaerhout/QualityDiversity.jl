@@ -5,9 +5,9 @@ CMA-MAE on the 20-dimensional Rastrigin function, MOME on BiSphere, on one CPU c
 GPU. The sections below give the settings, how each library is used and what the numbers do
 not say.
 
-![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../../docs/src/assets/speed-algorithms.svg)
-
 ![MAP-Elites: time against batch size on one CPU core and on a GPU, in float64 and float32](../../docs/src/assets/speed-map-elites.svg)
+
+![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../../docs/src/assets/speed-algorithms.svg)
 
 Every timed run is a row of a CSV file in [`results/`](results), with its coverage, maximum
 fitness, QD score and the software versions; those files hold every number on this page.

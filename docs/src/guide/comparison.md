@@ -65,9 +65,9 @@ core:
   1.35 times slower in `float64`; with a CVT archive QDax is 2.7 times faster in `float32`
   and 2.5 times slower in `float64`.
 
-![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../assets/speed-algorithms.svg)
-
 ![MAP-Elites: time against batch size on one CPU core and on a GPU, in float64 and float32](../assets/speed-map-elites.svg)
+
+![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../assets/speed-algorithms.svg)
 
 The objective in these benchmarks takes nanoseconds, so the numbers measure the library.
 With an expensive objective the evaluation dominates and the libraries differ little.
