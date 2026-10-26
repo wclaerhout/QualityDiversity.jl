@@ -101,6 +101,29 @@ end
     end
 end
 
+@testset "evolution-strategy updates do not allocate" begin
+    for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100))
+        es = strategy(dim; sigma0=0.5)
+        order = collect(1:es.batch_size)
+        rng = Xoshiro(1)
+        QD.sample!(rng, es)
+        QD.update!(es, order, 3)
+        # one call per generation: `allocated` would update twice
+        update_bytes(es, order, parents) = @allocated QD.update!(es, order, parents)
+        update_bytes(deepcopy(es), order, 2)
+        free = Bool[]
+        for _ in 1:6
+            QD.sample!(rng, es)
+            # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
+            recomputed = strategy === QD.CMAES ? es.eigen_eval : nothing
+            bytes = update_bytes(es, order, es.batch_size ÷ 2)
+            strategy === QD.CMAES && es.eigen_eval != recomputed && continue
+            push!(free, bytes == 0)
+        end
+        @test !isempty(free) && all(free)
+    end
+end
+
 @testset "inference with several emitters" begin
     prob = Rastrigin(4)
     archive = GridArchive(prob; dims=(5, 5))

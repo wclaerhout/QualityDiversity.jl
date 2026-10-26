@@ -41,6 +41,10 @@ mutable struct OpenAIES <: AbstractEvolutionStrategy
     update_ratio::Float64
     noise::Matrix{Float64}
     x::Matrix{Float64}
+    # Scratch space for an update: the centered ranks, the gradient estimate and the step.
+    const ranks::Vector{Float64}
+    const gradient::Vector{Float64}
+    const step::Vector{Float64}
 end
 
 function OpenAIES(dim::Integer; sigma0::Real,
@@ -57,7 +61,8 @@ function OpenAIES(dim::Integer; sigma0::Real,
     return OpenAIES(Int(dim), Int(batch_size), Float64(sigma0), lo, hi, Float64(learning_rate),
                     Float64(beta1), Float64(beta2), Float64(epsilon),
                     zeros(dim), zeros(dim), zeros(dim), 0, Inf,
-                    zeros(dim, batch_size), zeros(dim, batch_size))
+                    zeros(dim, batch_size), zeros(dim, batch_size),
+                    zeros(batch_size), zeros(dim), zeros(dim))
 end
 
 function reset!(es::OpenAIES, x0::AbstractVector{<:Real})
@@ -103,13 +108,13 @@ function update!(es::OpenAIES, order::AbstractVector{<:Integer}, parents::Intege
         throw(ArgumentError("parents must be between 0 and $(es.batch_size), got $parents"))
     n, half = es.batch_size, es.batch_size ÷ 2
     # Centered rank of every solution: 1/2 for the best, -1/2 for the worst.
-    ranks = zeros(n)
+    ranks = es.ranks
     for (position, k) in enumerate(order)
         ranks[k] = (n - position) / (n - 1) - 0.5
     end
-    gradient = zeros(es.dim)
+    gradient = fill!(es.gradient, 0.0)
     for k in 1:half
-        gradient .+= es.noise[:, k] .* (ranks[k] - ranks[k+half])
+        @views gradient .+= es.noise[:, k] .* (ranks[k] - ranks[k+half])
     end
     gradient ./= half * es.sigma0
 
@@ -117,7 +122,8 @@ function update!(es::OpenAIES, order::AbstractVector{<:Integer}, parents::Intege
     es.moment1 .= es.beta1 .* es.moment1 .+ (1 - es.beta1) .* gradient
     es.moment2 .= es.beta2 .* es.moment2 .+ (1 - es.beta2) .* gradient .^ 2
     scale = es.learning_rate * sqrt(1 - es.beta2^es.steps) / (1 - es.beta1^es.steps)
-    step = scale .* es.moment1 ./ (sqrt.(es.moment2) .+ es.epsilon)
+    step = es.step
+    step .= scale .* es.moment1 ./ (sqrt.(es.moment2) .+ es.epsilon)
     for i in 1:es.dim
         es.theta[i] = clamp(es.theta[i] + step[i], es.lower[i], es.upper[i])
     end

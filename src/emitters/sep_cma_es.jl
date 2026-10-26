@@ -29,6 +29,11 @@ mutable struct SepCMAES <: AbstractEvolutionStrategy
     # The last batch: `y = (x - mean) / sigma` and `x`, one solution per column.
     y::Matrix{Float64}
     x::Matrix{Float64}
+    # Scratch space for an update: the recombination weights, the steps of the parents and
+    # the mean shift.
+    const weights::Vector{Float64}
+    const chosen::Matrix{Float64}
+    const shift::Vector{Float64}
 end
 
 function SepCMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_size(dim),
@@ -36,7 +41,8 @@ function SepCMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_
     lo, hi = check_strategy_arguments(dim, sigma0, batch_size, lower, upper)
     return SepCMAES(Int(dim), Int(batch_size), Float64(sigma0), lo, hi,
                     zeros(dim), Float64(sigma0), ones(dim), zeros(dim), zeros(dim), 0,
-                    zeros(dim, batch_size), zeros(dim, batch_size))
+                    zeros(dim, batch_size), zeros(dim, batch_size),
+                    zeros(batch_size), zeros(dim, batch_size), zeros(dim))
 end
 
 function reset!(es::SepCMAES, x0::AbstractVector{<:Real})
@@ -69,10 +75,12 @@ function sample!(rng::AbstractRNG, es::SepCMAES)
     return es.x
 end
 
-# Constants of the update for `parents` parents. The learning rates of the covariance
-# are those of pycma's `CMA_diagonal` mode, with its rank-mu offset of 1/4.
-function sep_strategy_constants(dim, parents)
-    weights = recombination_weights(parents)
+# Constants of the update for `parents` parents, or for the given weights. The learning
+# rates of the covariance are those of pycma's `CMA_diagonal` mode, with its rank-mu
+# offset of 1/4.
+sep_strategy_constants(dim, parents::Integer) = sep_strategy_constants(dim, recombination_weights(parents))
+
+function sep_strategy_constants(dim, weights::AbstractVector)
     mueff = 1 / sum(abs2, weights)
     cc = (1 + 1 / dim + mueff / dim) / (sqrt(dim) + 1 / dim + 2 * mueff / dim)
     cs = (mueff + 2) / (dim + mueff + 5)
@@ -90,11 +98,11 @@ function update!(es::SepCMAES, order::AbstractVector{<:Integer}, parents::Intege
     es.count_eval += es.batch_size
     parents == 0 && return es
     n = es.dim
-    weights, mueff, cc, cs, c1, cmu, damps = sep_strategy_constants(n, parents)
+    weights, mueff, cc, cs, c1, cmu, damps = sep_strategy_constants(n, recombination_weights!(es.weights, parents))
     chi_n = sqrt(n) * (1 - 1 / (4n) + 1 / (21n^2))
 
-    ys = es.y[:, order[1:parents]]
-    yw = ys * weights
+    ys = chosen_columns!(es.chosen, es.y, order, parents)
+    yw = mul!(es.shift, ys, weights)
     es.mean .+= es.sigma .* yw
 
     es.path_sigma .= (1 - cs) .* es.path_sigma .+

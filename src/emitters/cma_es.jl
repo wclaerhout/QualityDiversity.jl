@@ -81,6 +81,15 @@ mutable struct CMAES{R<:RankOneRule} <: AbstractEvolutionStrategy
     # Scratch space for a draw.
     z::Vector{Float64}
     step::Vector{Float64}
+    # Scratch space for an update: the recombination weights, the steps of the parents and
+    # those steps times their weights, the mean shift and its whitened form, and
+    # `basis * Diagonal(eigenvalues .^ -1/2)`.
+    const weights::Vector{Float64}
+    const chosen::Matrix{Float64}
+    const weighted::Matrix{Float64}
+    const shift::Vector{Float64}
+    const whitened::Vector{Float64}
+    const scaled_basis::Matrix{Float64}
     const rank_one::R
 end
 
@@ -91,7 +100,9 @@ function CMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_siz
                zeros(dim), Float64(sigma0), Matrix{Float64}(I, dim, dim),
                Matrix{Float64}(I, dim, dim), ones(dim), Matrix{Float64}(I, dim, dim),
                zeros(dim), zeros(dim), 0, 0,
-               zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim), zeros(dim), rank_one)
+               zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim), zeros(dim),
+               zeros(batch_size), zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim),
+               zeros(dim), zeros(dim, dim), rank_one)
     return es
 end
 
@@ -154,9 +165,11 @@ function sample!(rng::AbstractRNG, es::CMAES)
     return es.x
 end
 
-# Recombination weights for `parents` parents, and the constants of the update.
-function strategy_constants(dim, parents)
-    weights = recombination_weights(parents)
+# Recombination weights for `parents` parents, or the given weights, and the constants
+# of the update.
+strategy_constants(dim, parents::Integer) = strategy_constants(dim, recombination_weights(parents))
+
+function strategy_constants(dim, weights::AbstractVector)
     mueff = 1 / sum(abs2, weights)
     cc = (4 + mueff / dim) / (dim + 4 + 2 * mueff / dim)
     cs = (mueff + 2) / (dim + mueff + 5)
@@ -181,15 +194,16 @@ function update!(es::CMAES, order::AbstractVector{<:Integer}, parents::Integer)
     es.count_eval += es.batch_size
     parents == 0 && return es
     n = es.dim
-    weights, mueff, cc, cs, c1, cmu, damps = strategy_constants(n, parents)
+    weights, mueff, cc, cs, c1, cmu, damps = strategy_constants(n, recombination_weights!(es.weights, parents))
     chi_n = sqrt(n) * (1 - 1 / (4n) + 1 / (21n^2))
 
-    ys = es.y[:, order[1:parents]]
-    yw = ys * weights                                    # mean shift in units of sigma
+    ys = chosen_columns!(es.chosen, es.y, order, parents)
+    yw = mul!(es.shift, ys, weights)                     # mean shift in units of sigma
     es.mean .+= es.sigma .* yw
 
     # Evolution path of the step size, and the stall indicator for the path of C.
-    es.path_sigma .= (1 - cs) .* es.path_sigma .+ sqrt(cs * (2 - cs) * mueff) .* (es.inv_sqrt * yw)
+    mul!(es.whitened, es.inv_sqrt, yw)
+    es.path_sigma .= (1 - cs) .* es.path_sigma .+ sqrt(cs * (2 - cs) * mueff) .* es.whitened
     norm_ps = norm(es.path_sigma)
     decay = 1 - (1 - cs)^(2 * es.count_eval / es.batch_size)
     hsig = norm_ps / sqrt(decay) / chi_n < 1.4 + 2 / (n + 1) ? 1.0 : 0.0
@@ -198,8 +212,13 @@ function update!(es::CMAES, order::AbstractVector{<:Integer}, parents::Integer)
     # Covariance: rank-one update from the path and rank-mu update from the parents.
     delta = (1 - hsig) * cc * (2 - cc)
     es.cov .*= 1 + c1 * delta - c1 - cmu
-    es.cov .+= rank_one_rate(es.rank_one, c1) .* (es.path_c * es.path_c')
-    mul!(es.cov, ys .* weights', ys', cmu, 1.0)
+    rate = rank_one_rate(es.rank_one, c1)
+    for j in 1:n, i in 1:n
+        es.cov[i, j] += rate * (es.path_c[i] * es.path_c[j])
+    end
+    weighted = view(es.weighted, :, 1:parents)
+    weighted .= ys .* weights'
+    mul!(es.cov, weighted, ys', cmu, 1.0)
 
     es.sigma *= exp(min(1.0, (cs / damps) * (norm_ps / chi_n - 1)))
 
@@ -215,11 +234,15 @@ function update_eigensystem!(es::CMAES)
     for j in 1:n, i in 1:j-1
         es.cov[i, j] = es.cov[j, i] = (es.cov[i, j] + es.cov[j, i]) / 2
     end
-    decomposition = eigen(Symmetric(es.cov))
+    # `eigen!` overwrites its argument, so it gets a copy in a buffer that is free until the
+    # decomposition is read.
+    es.scaled_basis .= es.cov
+    decomposition = eigen!(Symmetric(es.scaled_basis))
     if all(isfinite, decomposition.values) && all(isfinite, decomposition.vectors)
         es.eigenvalues .= max.(decomposition.values, floatmin(Float64))
         es.basis .= decomposition.vectors
-        es.inv_sqrt .= es.basis * Diagonal(1 ./ sqrt.(es.eigenvalues)) * es.basis'
+        es.scaled_basis .= es.basis .* (1 ./ sqrt.(es.eigenvalues))'
+        mul!(es.inv_sqrt, es.scaled_basis, es.basis')
     else
         es.eigenvalues .= NaN
     end

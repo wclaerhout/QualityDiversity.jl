@@ -105,10 +105,26 @@ function clip_step!(x, y, k, mean, sigma, lower, upper)
 end
 
 # Recombination weights `log(parents + 1/2) - log(i)`, normalized to sum to one.
-function recombination_weights(parents)
-    weights = [log(parents + 0.5) - log(i) for i in 1:parents]
+recombination_weights(parents) = recombination_weights!(Vector{Float64}(undef, parents), parents)
+
+# The recombination weights written into the first `parents` entries of `buffer`, returned
+# as a view of them.
+function recombination_weights!(buffer, parents)
+    weights = view(buffer, 1:parents)
+    for i in 1:parents
+        weights[i] = log(parents + 0.5) - log(i)
+    end
     weights ./= sum(weights)
     return weights
+end
+
+# Columns `order[1:parents]` of `y` copied into the first `parents` columns of `buffer`,
+# returned as a view of them.
+function chosen_columns!(buffer, y, order, parents)
+    for j in 1:parents, i in axes(y, 1)
+        buffer[i, j] = y[i, order[j]]
+    end
+    return view(buffer, :, 1:parents)
 end
 
 # Distance between two ranking keys, a number or a tuple of numbers.
