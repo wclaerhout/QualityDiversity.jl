@@ -141,23 +141,24 @@ function map_elites_figure(runs; name)
                               strokecolor=SURFACE, strokewidth=2)]
     Legend(fig[2, 1:2], [entry(first(s for s in drawn if s.label == l)) for l in labels], labels;
            orientation=:horizontal, halign=:left, nbanks=2, padding=(0, 0, 0, 0), patchsize=(42, 14))
-    Label(fig[5, 1:2], provenance(reduce(vcat, (s.rows for s in drawn))) * " Lower is faster.";
+    Label(fig[5, 1:2], provenance(reduce(vcat, (s.rows for s in drawn))) *
+          " Lower is faster. QDax with a grid index is QDax with its centroid search replaced by the index of a regular grid.";
           halign=:left, color=INK.secondary, fontsize=11, word_wrap=true, tellwidth=false)
     save_figure(fig, name)
 end
 
 cpu_series(rows) = [
-    Series("QualityDiversity.jl, grid", "QualityDiversity.jl", :solid,
+    Series("QualityDiversity.jl, grid index", "QualityDiversity.jl", :solid,
            filter(r -> matches(r; library="QualityDiversity.jl", threads="1"), rows)),
-    Series("pyribs, grid", "pyribs", :solid, filter(r -> matches(r; library="pyribs"), rows)),
+    Series("pyribs, grid index", "pyribs", :solid, filter(r -> matches(r; library="pyribs"), rows)),
     Series("QDax, grid index", "QDax", :solid, filter(r -> matches(r; library="QDax", variant="grid index"), rows)),
 ]
 
 gpu_series(rows) = [
-    Series("QualityDiversity.jl, grid", "QualityDiversity.jl", :solid,
+    Series("QualityDiversity.jl, grid index", "QualityDiversity.jl", :solid,
            filter(r -> matches(r; library="QualityDiversity.jl", variant="grid"), rows)),
     Series("QDax, grid index", "QDax", :solid, filter(r -> matches(r; library="QDax", variant="grid index"), rows)),
-    Series("QualityDiversity.jl, CVT", "QualityDiversity.jl", :dash,
+    Series("QualityDiversity.jl, centroid search", "QualityDiversity.jl", :dash,
            filter(r -> matches(r; library="QualityDiversity.jl", variant="cvt"), rows)),
     Series("QDax, centroid search", "QDax", :dash,
            filter(r -> matches(r; library="QDax", variant="centroid search"), rows)),
@@ -191,10 +192,10 @@ const CPU_PANELS = [
 ]
 
 const GPU_PANELS = [
-    AlgorithmPanel("MAP-Elites, $archive, $precision",
+    AlgorithmPanel("$lookup, $precision",
                    ["QualityDiversity.jl" => gpu_map_elites(ours, precision), "QDax" => gpu_map_elites(qdax, precision)])
     for precision in ("float32", "float64")
-    for (archive, ours, qdax) in (("grid", "grid", "grid index"), ("CVT", "cvt", "centroid search"))
+    for (lookup, ours, qdax) in (("grid index", "grid", "grid index"), ("centroid search", "cvt", "centroid search"))
 ]
 
 # Draws one bar per library on `ax`, from zero to the median, with a line over the middle
@@ -228,7 +229,7 @@ end
 # from zero and one bar per library: on one CPU core in float64 in the top row, MAP-Elites on
 # the GPU in both precisions below.
 function algorithms_figure(runs; name)
-    rows_of_panels = (("CPU, one core, float64", CPU_PANELS), ("GPU, batch 10 000", GPU_PANELS))
+    rows_of_panels = (("CPU, one core, float64", CPU_PANELS), ("MAP-Elites on a GPU, batch 10 000", GPU_PANELS))
     ncols = maximum(length(panels) for (_, panels) in rows_of_panels)
     fig = Figure(size=(880, 640))
     Label(fig[1, 1:ncols], "Time of each algorithm"; halign=:left, font=:bold, fontsize=15, tellwidth=false)
@@ -246,7 +247,10 @@ function algorithms_figure(runs; name)
     Legend(fig[2, 1:ncols], [PolyElement(; color) for (_, color, _) in LIBRARIES],
            collect(first.(LIBRARIES)); orientation=:horizontal, halign=:left, padding=(0, 0, 0, 0),
            tellwidth=false)
-    Label(fig[7, 1:ncols], provenance(drawn; spread=" Black lines span the middle half.") * " Lower is faster. pyribs has no MOME and QDax no CMA-MAE; pyribs does not run on a GPU.";
+    caption = provenance(drawn; spread=" Black lines span the middle half.") *
+              " Lower is faster. pyribs has no MOME and QDax no CMA-MAE; pyribs does not run on a GPU." *
+              " QDax with a grid index is QDax with its centroid search replaced by the index of a regular grid."
+    Label(fig[7, 1:ncols], caption;
           halign=:left, color=INK.secondary, fontsize=11, word_wrap=true, tellwidth=false)
     save_figure(fig, name)
 end
