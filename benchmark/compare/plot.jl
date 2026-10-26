@@ -48,17 +48,20 @@ function apply_theme!()
                      Lines=(linewidth=2,), Scatter=(markersize=10, strokecolor=SURFACE, strokewidth=2)))
 end
 
-# The hardware and software of the runs in `rows`, for the caption of a figure.
-function provenance(rows)
-    hardware = join(sort(unique(r["hardware"] for r in rows)), " | ")
-    return "$hardware. Median of $(join(sort(unique(string(n) for n in run_counts(rows))), " or ")) runs; bars span the middle half."
+# The hardware of the runs in `rows` and their number, for the caption of a figure.
+function provenance(rows; spread=" Bars span the middle half.")
+    hardware = join(sort(unique(h for r in rows for h in split(r["hardware"], "; "))), ", ")
+    counts = join(string.(sort(unique(run_counts(rows)))), ", ", " or ")
+    return "$hardware. Median of $counts runs.$spread"
 end
 run_counts(rows) = values(Dict(key => count(==(key), keys_of(rows)) for key in unique(keys_of(rows))))
-keys_of(rows) = [(r["library"], r["variant"], r["precision"], r["threads"], r["batch_size"], r["method"]) for r in rows]
+keys_of(rows) = [(r["library"], r["device"], r["variant"], r["precision"], r["threads"], r["batch_size"], r["method"]) for r in rows]
 
 # Ticks at 1, 2 and 5 times a power of ten from `lo` to `hi`, written as plain numbers.
+# Over more than three powers of ten only the powers themselves are ticked.
 function log_ticks(lo, hi)
-    values = [m * 10.0^e for e in floor(Int, log10(lo)):ceil(Int, log10(hi)) for m in (1, 2, 5)]
+    multiples = hi / lo > 1000 ? (1,) : (1, 2, 5)
+    values = [m * 10.0^e for e in floor(Int, log10(lo)):ceil(Int, log10(hi)) for m in multiples]
     values = filter(v -> lo <= v <= hi, values)
     return (values, [v >= 1 ? string(round(Int, v)) : string(round(v; sigdigits=1)) for v in values])
 end
@@ -99,97 +102,167 @@ function save_figure(fig, name)
     println("wrote ", path)
 end
 
-# Time against batch size for MAP-Elites on `device`, one panel per precision.
-function map_elites_figure(runs, device; title, series_of, name)
-    rows = filter(r -> matches(r; benchmark="map_elites", device), runs)
-    isempty(rows) && return @warn "no MAP-Elites runs on the $device; $name not drawn"
-    fig = Figure(size=(880, 460))
-    Label(fig[1, 1:2], title; halign=:left, font=:bold, fontsize=15)
-    axes = Axis[]
-    lo, hi = Inf, -Inf
-    for (k, precision) in enumerate(("float64", "float32"))
-        ax = Axis(fig[3, k]; title=precision, xlabel="batch size",
-                  ylabel=k == 1 ? "seconds for 360 000 evaluations (lower is faster)" : "")
-        l, h = time_panel!(ax, series_of(filter(r -> r["precision"] == precision, rows)))
-        lo, hi = min(lo, l), max(hi, h)
-        push!(axes, ax)
+# Time against batch size for MAP-Elites: the CPU in the top row and the GPU in the bottom
+# row, one column per precision. Solid lines use a grid lookup, dashed ones a search over
+# the centroids of the cells.
+function map_elites_figure(runs; name)
+    rows = filter(r -> r["benchmark"] == "map_elites", runs)
+    isempty(rows) && return @warn "no MAP-Elites runs; $name not drawn"
+    devices = (("cpu", "CPU, one core", cpu_series), ("gpu", "GPU", gpu_series))
+    fig = Figure(size=(880, 820))
+    Label(fig[1, 1:2], "MAP-Elites: time against batch size"; halign=:left, font=:bold, fontsize=15)
+    drawn = Series[]
+    for (i, (device, device_title, series_of)) in enumerate(devices)
+        device_rows = filter(r -> r["device"] == device, rows)
+        axes = Axis[]
+        lo, hi = Inf, -Inf
+        for (k, precision) in enumerate(("float64", "float32"))
+            ax = Axis(fig[2 + i, k]; title="$device_title, $precision",
+                      xlabel=i == length(devices) ? "batch size" : "",
+                      ylabel=k == 1 ? "seconds for 360 000 evaluations" : "")
+            series = series_of(filter(r -> r["precision"] == precision, device_rows))
+            l, h = time_panel!(ax, series)
+            lo, hi = min(lo, l), max(hi, h)
+            append!(drawn, filter(s -> !isempty(s.rows), series))
+            push!(axes, ax)
+        end
+        isfinite(lo) || continue
+        ymin = maximum(v for v in log_ticks(lo / 10, lo)[1] if v <= lo / 1.1)   # a tick below the data
+        for ax in axes
+            xlims!(ax, 28, 13_000)
+            ylims!(ax, ymin, hi * 1.3)
+            ax.yticks = log_ticks(ymin, hi * 1.3)
+        end
     end
-    ymin = maximum(v for v in log_ticks(lo / 10, lo)[1] if v <= lo / 1.1)   # a tick below the data
-    for ax in axes
-        xlims!(ax, 28, 13_000)
-        ylims!(ax, ymin, hi * 1.3)
-        ax.yticks = log_ticks(ymin, hi * 1.3)
-    end
-    # One entry per series drawn in either panel.
-    drawn = filter(s -> !isempty(s.rows), series_of(rows))
-    elements = [[LineElement(; color=style(s.library)[2], linestyle=s.linestyle, linewidth=2),
-                 MarkerElement(; color=style(s.library)[2], marker=style(s.library)[3], markersize=10,
-                               strokecolor=SURFACE, strokewidth=2)] for s in drawn]
-    Legend(fig[2, 1:2], elements, [s.label for s in drawn]; orientation=:horizontal, halign=:left,
-           padding=(0, 0, 0, 0), patchsize=(42, 14))
-    Label(fig[4, 1:2], provenance(reduce(vcat, (s.rows for s in drawn))); halign=:left, color=INK.secondary, fontsize=11)
+    # One entry per label drawn in any panel.
+    labels = unique(s.label for s in drawn)
+    entry(s) = [LineElement(; color=style(s.library)[2], linestyle=s.linestyle, linewidth=2),
+                MarkerElement(; color=style(s.library)[2], marker=style(s.library)[3], markersize=10,
+                              strokecolor=SURFACE, strokewidth=2)]
+    Legend(fig[2, 1:2], [entry(first(s for s in drawn if s.label == l)) for l in labels], labels;
+           orientation=:horizontal, halign=:left, nbanks=2, padding=(0, 0, 0, 0), patchsize=(42, 14))
+    Label(fig[5, 1:2], provenance(reduce(vcat, (s.rows for s in drawn))) *
+          " Lower is faster. QDax with a grid index is QDax with its centroid search replaced by the index of a regular grid.";
+          halign=:left, color=INK.secondary, fontsize=11, word_wrap=true, tellwidth=false)
     save_figure(fig, name)
 end
 
 cpu_series(rows) = [
-    Series("QualityDiversity.jl", "QualityDiversity.jl", :solid,
+    Series("QualityDiversity.jl, grid index", "QualityDiversity.jl", :solid,
            filter(r -> matches(r; library="QualityDiversity.jl", threads="1"), rows)),
-    Series("pyribs", "pyribs", :solid, filter(r -> matches(r; library="pyribs"), rows)),
+    Series("pyribs, grid index", "pyribs", :solid, filter(r -> matches(r; library="pyribs"), rows)),
     Series("QDax, grid index", "QDax", :solid, filter(r -> matches(r; library="QDax", variant="grid index"), rows)),
 ]
 
 gpu_series(rows) = [
-    Series("QualityDiversity.jl", "QualityDiversity.jl", :solid,
+    Series("QualityDiversity.jl, grid index", "QualityDiversity.jl", :solid,
            filter(r -> matches(r; library="QualityDiversity.jl", variant="grid"), rows)),
-    Series("QDax", "QDax", :solid, filter(r -> matches(r; library="QDax", variant="centroid search"), rows)),
-    Series("QDax, grid index", "QDax", :dash, filter(r -> matches(r; library="QDax", variant="grid index"), rows)),
+    Series("QDax, grid index", "QDax", :solid, filter(r -> matches(r; library="QDax", variant="grid index"), rows)),
+    Series("QualityDiversity.jl, centroid search", "QualityDiversity.jl", :dash,
+           filter(r -> matches(r; library="QualityDiversity.jl", variant="cvt"), rows)),
+    Series("QDax, centroid search", "QDax", :dash,
+           filter(r -> matches(r; library="QDax", variant="centroid search"), rows)),
 ]
 
-# Median time of CMA-ME, CMA-MAE and MOME on one CPU core, one row per algorithm and one
-# dot per library, on a logarithmic axis.
-function algorithms_figure(runs; name)
-    algorithms = (("CMA-ME", r -> matches(r; benchmark="cma", method="CMA-ME", variant="improvement emitters")),
-                  ("CMA-MAE", r -> matches(r; benchmark="cma", method="CMA-MAE", variant="")),
-                  ("MOME", r -> matches(r; benchmark="mome")))
-    rows = filter(r -> r["device"] == "cpu" && r["precision"] == "float64" && r["threads"] in ("1", "") &&
-                       any(f(r) for (_, f) in algorithms), runs)
-    isempty(rows) && return @warn "no CMA-ME, CMA-MAE or MOME runs; $name not drawn"
-    fig = Figure(size=(880, 360))
-    Label(fig[1, 1], "CMA-ME, CMA-MAE and MOME on one CPU core, float64"; halign=:left, font=:bold, fontsize=15)
-    ax = Axis(fig[3, 1]; xlabel="seconds for the whole budget (lower is faster)", xscale=log10,
-              yticks=(1:length(algorithms), [a[1] for a in algorithms]), yreversed=true, ygridvisible=false)
-    offsets = Dict("QualityDiversity.jl" => -0.22, "pyribs" => 0.0, "QDax" => 0.22)
-    lo, hi = Inf, -Inf
-    for (k, (_, f)) in enumerate(algorithms), (library, color, marker) in LIBRARIES
-        t = seconds(filter(r -> f(r) && r["library"] == library, rows))
-        isempty(t) && continue
-        y = k + offsets[library]
+# One panel of the algorithms figure: a title and, per library, the runs it draws.
+struct AlgorithmPanel
+    title::String
+    selects::Vector{Pair{String,Function}}
+end
+
+# The runs of one setting with a batch size of 10 000 on the GPU.
+gpu_map_elites(variant, precision) = r -> matches(r; benchmark="map_elites", device="gpu", precision,
+                                                 batch_size="10000", variant)
+
+const CPU_PANELS = [
+    AlgorithmPanel("MAP-Elites, batch 10 000",
+                   let me(r) = matches(r; benchmark="map_elites", device="cpu", precision="float64",
+                                       batch_size="10000")
+                       ["QualityDiversity.jl" => r -> me(r) && r["threads"] == "1",
+                        "pyribs" => me,
+                        "QDax" => r -> me(r) && r["variant"] == "grid index"]
+                   end),
+    AlgorithmPanel("CMA-ME",
+                   [l => r -> matches(r; benchmark="cma", method="CMA-ME", variant="improvement emitters",
+                                      precision="float64") for l in first.(LIBRARIES)]),
+    AlgorithmPanel("CMA-MAE",
+                   [l => r -> matches(r; benchmark="cma", method="CMA-MAE", variant="", precision="float64")
+                    for l in first.(LIBRARIES)]),
+    AlgorithmPanel("MOME", [l => r -> matches(r; benchmark="mome", precision="float64") for l in first.(LIBRARIES)]),
+]
+
+const GPU_PANELS = [
+    AlgorithmPanel("$lookup, $precision",
+                   ["QualityDiversity.jl" => gpu_map_elites(ours, precision), "QDax" => gpu_map_elites(qdax, precision)])
+    for precision in ("float32", "float64")
+    for (lookup, ours, qdax) in (("grid index", "grid", "grid index"), ("centroid search", "cvt", "centroid search"))
+]
+
+# Draws one bar per library on `ax`, from zero to the median, with a line over the middle
+# half and the median written above, and returns the runs drawn.
+function algorithm_panel!(ax, runs, panel)
+    drawn = Dict{String,String}[]
+    hi = 0.0
+    x = 0
+    for (library, select) in panel.selects
+        rows = filter(r -> r["library"] == library && select(r), runs)
+        isempty(rows) && continue
+        x += 1
+        _, color, _ = style(library)
+        t = seconds(rows)
         q1, m, q3 = quantile(t, 0.25), median(t), quantile(t, 0.75)
-        rangebars!(ax, [y], [q1], [q3]; direction=:x, color, whiskerwidth=6)
-        scatter!(ax, [m], [y]; color, marker, label=library)
-        text!(ax, q3, y; text=format_seconds(m), align=(:left, :center), offset=(8, 0),
+        barplot!(ax, [x], [m]; color, width=0.7)
+        cap = 0.08    # half the width of the ends of the line, in bar positions
+        linesegments!(ax, [(x, q1), (x, q3), (x - cap, q1), (x + cap, q1), (x - cap, q3), (x + cap, q3)];
+                      color=INK.primary, linewidth=1.5)
+        text!(ax, x, q3; text=format_seconds(m), align=(:center, :bottom), offset=(0, 4),
               color=INK.secondary, fontsize=12)
-        lo, hi = min(lo, q1), max(hi, q3)
+        hi = max(hi, q3)
+        append!(drawn, rows)
     end
-    xlims!(ax, lo / 1.5, hi * 4)    # room on the right for the labels
-    ylims!(ax, length(algorithms) + 0.5, 0.5)
-    ax.xticks = log_ticks(lo / 1.5, hi * 4)
-    Legend(fig[2, 1], ax; orientation=:horizontal, halign=:left, merge=true, padding=(0, 0, 0, 0))
-    Label(fig[4, 1], provenance(rows) * " pyribs has no MOME and QDax no CMA-MAE.";
-          halign=:left, color=INK.secondary, fontsize=11)
+    xlims!(ax, 0.4, max(x, 2) + 0.6)
+    ylims!(ax, 0, 1.2hi)    # room above the tallest bar for its label
+    return drawn
+end
+
+# Median time of every algorithm measured, one panel per algorithm with its own linear axis
+# from zero and one bar per library: on one CPU core in float64 in the top row, MAP-Elites on
+# the GPU in both precisions below.
+function algorithms_figure(runs; name)
+    rows_of_panels = (("CPU, one core, float64", CPU_PANELS), ("MAP-Elites on a GPU, batch 10 000", GPU_PANELS))
+    ncols = maximum(length(panels) for (_, panels) in rows_of_panels)
+    fig = Figure(size=(880, 640))
+    Label(fig[1, 1:ncols], "Time of each algorithm"; halign=:left, font=:bold, fontsize=15, tellwidth=false)
+    drawn = Dict{String,String}[]
+    for (i, (device_title, panels)) in enumerate(rows_of_panels)
+        Label(fig[1 + 2i, 1:ncols], device_title; halign=:left, font=:bold, tellwidth=false)
+        for (k, panel) in enumerate(panels)
+            ax = Axis(fig[2 + 2i, k]; title=panel.title, titlefont=:regular, titlesize=12,
+                      ylabel=k == 1 ? "seconds" : "", xticksvisible=false, xticklabelsvisible=false,
+                      xgridvisible=false)
+            append!(drawn, algorithm_panel!(ax, runs, panel))
+        end
+    end
+    isempty(drawn) && return @warn "no runs for $name"
+    Legend(fig[2, 1:ncols], [PolyElement(; color) for (_, color, _) in LIBRARIES],
+           collect(first.(LIBRARIES)); orientation=:horizontal, halign=:left, padding=(0, 0, 0, 0),
+           tellwidth=false)
+    caption = provenance(drawn; spread=" Black lines span the middle half.") *
+              " Lower is faster. pyribs has no MOME and QDax no CMA-MAE; pyribs does not run on a GPU." *
+              " QDax with a grid index is QDax with its centroid search replaced by the index of a regular grid."
+    Label(fig[7, 1:ncols], caption;
+          halign=:left, color=INK.secondary, fontsize=11, word_wrap=true, tellwidth=false)
     save_figure(fig, name)
 end
 
-format_seconds(t) = t >= 10 ? "$(round(Int, t)) s" : t >= 1 ? "$(round(t; digits=1)) s" : "$(round(t; sigdigits=2)) s"
+format_seconds(t) = t >= 10 ? "$(round(Int, t)) s" : t >= 1 ? "$(round(t; digits=1)) s" :
+                    t >= 0.01 ? "$(round(t; sigdigits=2)) s" : "$(round(1000t; sigdigits=2)) ms"
 
 function main()
     apply_theme!()
     runs = read_runs(RESULTS)
-    map_elites_figure(runs, "cpu"; title="MAP-Elites on one CPU core", series_of=cpu_series,
-                      name="speed-map-elites-cpu.svg")
-    algorithms_figure(runs; name="speed-algorithms-cpu.svg")
-    map_elites_figure(runs, "gpu"; title="MAP-Elites on a GPU", series_of=gpu_series,
-                      name="speed-map-elites-gpu.svg")
+    algorithms_figure(runs; name="speed-algorithms.svg")
+    map_elites_figure(runs; name="speed-map-elites.svg")
 end
 
 main()
