@@ -1,8 +1,19 @@
-# QualityDiversity.jl, pyribs and QDax on Rastrigin
+# QualityDiversity.jl, pyribs and QDax
 
-MAP-Elites on the 20-dimensional Rastrigin function, run with the same
-settings in three libraries. Later sections do the same for CMA-ME and CMA-MAE,
-for MOME against QDax, and for MAP-Elites on a GPU.
+The same algorithms with the same settings in three libraries: MAP-Elites, CMA-ME and
+CMA-MAE on the 20-dimensional Rastrigin function, MOME on BiSphere, on one CPU core and on a
+GPU. The sections below give the settings, how each library is used and what the numbers do
+not say.
+
+![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../../docs/src/assets/speed-algorithms.svg)
+
+![MAP-Elites: time against batch size on one CPU core and on a GPU, in float64 and float32](../../docs/src/assets/speed-map-elites.svg)
+
+Every timed run is a row of a CSV file in [`results/`](results), with its coverage, maximum
+fitness, QD score and the software versions; those files hold every number on this page.
+`plot.jl` draws the two figures from them.
+
+## MAP-Elites
 
 | setting | value |
 |---|---|
@@ -31,7 +42,7 @@ budget; compilation is excluded. Julia is timed with `@elapsed` and Python
 with `time.perf_counter`, after one untimed run that compiles. "Middle half" is
 the range from the first to the third quartile of the run times.
 
-Every script prints its table and writes one row per timed run to a CSV file in
+Every script prints a table and writes one row per timed run to a CSV file in
 `results/` (`results.jl` and `results.py` write the same columns, with the
 software versions, the commit and the hardware). `plot.jl` draws the figures of
 the documentation from these files:
@@ -41,9 +52,9 @@ julia --project=docs benchmark/compare/plot.jl
 ```
 
 `run_all.sh` runs every script on one machine with the core pinning described
-below; the CSV files in `results/` and every table on this page come from one such run.
+below; the CSV files in `results/` come from one such run.
 
-## How each library is used
+### How each library is used
 
 - **QualityDiversity.jl:** `MAPElites` with a `GaussianMutation` and the
   default threaded `evaluate_batch`. The archive records
@@ -78,141 +89,33 @@ grid index below. So QDax is reported twice:
   Nothing else changes. This is the fair CPU comparison: it is what someone
   who needs QDax to be fast on a CPU would write.
 
-## Results
+### Results
 
-![MAP-Elites on one CPU core: time against batch size for QualityDiversity.jl, pyribs and QDax](../../docs/src/assets/speed-map-elites-cpu.svg)
+On one core, QualityDiversity.jl takes about the same time at every batch size (0.16 to
+0.17 s for 360 000 evaluations, over two million evaluations per second), because each
+solution costs the same work: one mutation, one evaluation and one insertion. The libraries
+that vectorize a whole batch gain from larger batches. QualityDiversity.jl is faster than
+QDax up to a batch size of 100 in both precisions (5.4 to 5.8 times at 36). In `float32`, the
+precision QDax uses by default, QDax with the grid index is 1.3 and 1.7 times faster at batch
+sizes 1000 and 10 000; in `float64` QualityDiversity.jl stays 1.2 to 1.35 times faster there.
+`Float32` makes QualityDiversity.jl 7% to 8% faster, less than the factor of two QDax gains,
+because Julia's scalar `cos` is not much faster in `Float32` while XLA vectorizes it. pyribs
+is slower than both at every batch size, 14 times slower than QualityDiversity.jl at 36 and
+about 2 times at 1000 and above. QDax with its own centroid search takes about 29 s whatever
+the batch size, about 180 times longer, and is left out of the figure.
 
-Median time in seconds for the whole budget, one core:
+With 8 threads (`--threads=8`, cores 0–7) QualityDiversity.jl takes half the time from a
+batch of 1000 up (0.076 to 0.080 s in `float64` and 0.070 to 0.072 s in `float32`). Only the evaluation
+is threaded, and only when a batch would take longer than about 100 µs on one thread; a
+Rastrigin evaluation takes about 200 ns, so batches of 36 and 100 stay on one thread. The
+mutation and the insertion, which stay on one thread, take the rest. The archives are the same
+as with one thread: the results do not depend on the number of threads.
 
-| batch size | QualityDiversity.jl, float64 | QualityDiversity.jl, float32 | pyribs | QDax, grid index, float32 | QDax, grid index, float64 | QDax, centroid search, float32 |
-|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.172 | 0.159 | 2.444 | 0.923 | 0.926 | 28.9 |
-| 100 | 0.172 | 0.160 | 1.062 | 0.434 | 0.526 | 28.3 |
-| 1000 | 0.169 | 0.158 | 0.332 | 0.119 | 0.228 | 28.6 |
-| 10 000 | 0.168 | 0.156 | 0.355 | 0.094 | 0.203 | 28.8 |
+Coverage and QD score agree across the libraries at each batch size to within the spread
+between seeds. At batch size 10 000 every library fills fewer cells (about 0.94), because the
+budget allows only 36 rounds.
 
-Time of QDax divided by time of QualityDiversity.jl at the same precision, so
-values above 1 mean QualityDiversity.jl is faster:
-
-| batch size | float32 (QDax, grid index) | float64 (QDax, grid index) | QDax, centroid search, against float32 |
-|---:|---:|---:|---:|
-| 36 | 5.8 | 5.4 | 181 |
-| 100 | 2.7 | 3.1 | 177 |
-| 1000 | 0.75 | 1.35 | 181 |
-| 10 000 | 0.60 | 1.21 | 185 |
-
-Time of pyribs divided by time of QualityDiversity.jl in `float64`:
-14.2, 6.2, 2.0 and 2.1 for batch sizes 36, 100, 1000 and 10 000.
-
-In short: QualityDiversity.jl is faster than QDax on a CPU up to a batch size
-of 100 in both precisions. In `float32`, the precision QDax uses by default,
-QDax with the grid index is 1.3 and 1.7 times faster at batch sizes 1000 and
-10 000. In `float64` QualityDiversity.jl stays 1.2 to 1.35 times faster there.
-`Float32` makes QualityDiversity.jl 7% to 8% faster, less than the factor of
-two QDax gains, because Julia's scalar `cos` is not much faster in `Float32`
-while XLA vectorizes it. pyribs is slower than both at every batch size.
-
-QualityDiversity.jl takes about the same time at every batch size (0.16 to
-0.17 s, over two million evaluations per second), because each solution costs
-the same work: one mutation, one evaluation and one insertion. The libraries
-that vectorize a whole batch gain from larger batches.
-
-### Eight threads
-
-`compare.jl` with `--threads=8`, pinned to cores 0–7. Median time in seconds:
-
-| batch size | float64, 1 thread | float64, 8 threads | float32, 1 thread | float32, 8 threads |
-|---:|---:|---:|---:|---:|
-| 36 | 0.172 | 0.166 | 0.159 | 0.157 |
-| 100 | 0.172 | 0.166 | 0.160 | 0.154 |
-| 1000 | 0.169 | 0.076 | 0.158 | 0.072 |
-| 10 000 | 0.168 | 0.080 | 0.156 | 0.070 |
-
-Only the evaluation is threaded, and only when a batch would take longer than about
-100 µs on one thread; a Rastrigin evaluation takes about 200 ns, so batches of 36 and 100
-stay on one thread. From 1000 up, eight threads halve the time; the mutation and the
-insertion, which stay on one thread, take the rest. The archives are the same as with one
-thread: the results do not depend on the number of threads.
-
-### Full tables
-
-**QualityDiversity.jl, float64, 1 thread**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.163 | 0.172 | 0.170–0.178 | 2 089 464 | 0.986 | -129.4 | 4 777 337 |
-| 100 | 0.161 | 0.172 | 0.168–0.175 | 2 091 113 | 0.986 | -130.6 | 4 787 824 |
-| 1000 | 0.162 | 0.169 | 0.166–0.170 | 2 133 556 | 0.986 | -133.2 | 4 795 986 |
-| 10 000 | 0.162 | 0.168 | 0.165–0.174 | 2 142 268 | 0.941 | -130.3 | 4 612 801 |
-
-**QualityDiversity.jl, float32, 1 thread**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.155 | 0.159 | 0.157–0.163 | 2 268 421 | 0.989 | -132.4 | 4 779 777 |
-| 100 | 0.154 | 0.160 | 0.157–0.163 | 2 248 346 | 0.987 | -133.8 | 4 780 504 |
-| 1000 | 0.150 | 0.158 | 0.156–0.159 | 2 283 371 | 0.986 | -133.3 | 4 795 119 |
-| 10 000 | 0.149 | 0.156 | 0.152–0.160 | 2 301 294 | 0.945 | -132.0 | 4 618 760 |
-
-**QualityDiversity.jl, float64, 8 threads**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.162 | 0.166 | 0.163–0.168 | 2 168 805 | 0.986 | -129.4 | 4 777 337 |
-| 100 | 0.161 | 0.166 | 0.165–0.167 | 2 173 190 | 0.986 | -130.6 | 4 787 824 |
-| 1000 | 0.074 | 0.076 | 0.075–0.077 | 4 751 489 | 0.986 | -133.2 | 4 795 986 |
-| 10 000 | 0.072 | 0.080 | 0.076–0.086 | 4 511 013 | 0.941 | -130.3 | 4 612 801 |
-
-**QualityDiversity.jl, float32, 8 threads**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.151 | 0.157 | 0.155–0.160 | 2 299 594 | 0.989 | -132.4 | 4 779 777 |
-| 100 | 0.152 | 0.154 | 0.153–0.155 | 2 335 461 | 0.987 | -133.8 | 4 780 504 |
-| 1000 | 0.071 | 0.072 | 0.072–0.073 | 4 975 708 | 0.986 | -133.3 | 4 795 119 |
-| 10 000 | 0.062 | 0.070 | 0.066–0.072 | 5 163 632 | 0.945 | -132.0 | 4 618 760 |
-
-**pyribs** (`OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1`)
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 2.417 | 2.444 | 2.434–2.451 | 147 275 | 0.988 | -136.5 | 4 790 761 |
-| 100 | 1.054 | 1.062 | 1.061–1.064 | 338 873 | 0.988 | -134.0 | 4 796 704 |
-| 1000 | 0.331 | 0.332 | 0.332–0.333 | 1 084 082 | 0.986 | -132.5 | 4 803 731 |
-| 10 000 | 0.354 | 0.355 | 0.354–0.356 | 1 012 882 | 0.945 | -135.2 | 4 630 502 |
-
-**QDax, grid index, float32**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.922 | 0.923 | 0.922–0.924 | 390 237 | 0.987 | -131.1 | 4 780 165 |
-| 100 | 0.433 | 0.434 | 0.434–0.435 | 828 998 | 0.988 | -136.9 | 4 789 608 |
-| 1000 | 0.119 | 0.119 | 0.119–0.119 | 3 023 285 | 0.985 | -135.3 | 4 788 907 |
-| 10 000 | 0.094 | 0.094 | 0.094–0.094 | 3 831 936 | 0.944 | -127.8 | 4 623 051 |
-
-**QDax, grid index, float64**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 0.925 | 0.926 | 0.926–0.927 | 388 687 | 0.986 | -133.5 | 4 780 745 |
-| 100 | 0.525 | 0.526 | 0.526–0.526 | 684 820 | 0.985 | -133.3 | 4 771 358 |
-| 1000 | 0.227 | 0.228 | 0.227–0.228 | 1 581 990 | 0.986 | -131.9 | 4 795 016 |
-| 10 000 | 0.203 | 0.203 | 0.203–0.204 | 1 770 102 | 0.942 | -131.1 | 4 613 920 |
-
-**QDax, centroid search, float32** (3 runs per row)
-
-| batch size | min s | median s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 28.821 | 28.851 | 12 478 | 0.985 | -139.7 | 4 748 242 |
-| 100 | 28.317 | 28.344 | 12 701 | 0.986 | -141.1 | 4 789 824 |
-| 1000 | 28.467 | 28.568 | 12 602 | 0.987 | -134.7 | 4 804 787 |
-| 10 000 | 28.782 | 28.818 | 12 492 | 0.948 | -124.1 | 4 629 452 |
-
-Coverage and QD score agree across the libraries at each batch size to within
-the spread between seeds. At batch size 10 000 every library fills fewer cells
-(about 0.94), because the budget allows only 36 rounds.
-
-## What the numbers do not say
+### What the numbers do not say
 
 - **One CPU core.** QDax is built for accelerators, where the work per step is
   parallel across thousands of solutions. These runs use one CPU core; the
@@ -227,12 +130,12 @@ the spread between seeds. At batch size 10 000 every library fills fewer cells
   in `float32` with QDax in `float32`, and `float64` with `float64`. pyribs
   runs in `float64`.
 - **Spread.** The middle half of the run times lies within 8% of the median for
-  every row, and within 1% for the Python libraries, so differences of a few
+  every setting, and within 1% for the Python libraries, so differences of a few
   percent, such as between the 1- and 8-thread runs at a batch of 36, are level.
 - **Threads.** Only QualityDiversity.jl is also run with several threads;
   multi-core JAX and numpy are not measured.
 
-## Reproducing
+### Reproducing
 
 `run_all.sh` runs all the commands of this page in order. The CPU runs alone:
 
@@ -271,34 +174,12 @@ solutions of all emitters at once, and QDax runs one emitter of its pool per ste
 
 ### Results
 
-![CMA-ME, CMA-MAE and MOME on one CPU core: median time of each library](../../docs/src/assets/speed-algorithms-cpu.svg)
-
-Median over 11 runs. Time is for the whole budget on one core. Coverage and QD score
-are those of the archive of the best solutions (QD-score offset 820).
-
-| method | library | median s | coverage | max fitness | QD score |
-|---|---|---:|---:|---:|---:|
-| CMA-ME, improvement | QualityDiversity.jl | 0.293 | 0.999 | -126.8 | 4 651 868 |
-| | pyribs | 2.042 | 0.999 | -119.8 | 4 642 313 |
-| | QDax, float32 | 8.339 | 0.997 | -129.4 | 4 675 812 |
-| | QDax, float64 | 8.079 | 0.998 | -129.0 | 4 692 007 |
-| CMA-ME, optimizing | QualityDiversity.jl | 0.362 | 0.078 | -18.9 | 483 419 |
-| | pyribs | 1.941 | 0.084 | -19.9 | 525 502 |
-| | QDax, float32 | 8.372 | 0.622 | -114.7 | 3 248 358 |
-| | QDax, float64 | 8.086 | 0.625 | -116.8 | 3 263 107 |
-| CMA-ME, random direction | QualityDiversity.jl | 0.328 | 0.999 | -129.4 | 4 311 734 |
-| | pyribs | 2.082 | 0.999 | -136.3 | 4 305 520 |
-| | QDax, float32 | 8.379 | 0.825 | -129.1 | 3 706 244 |
-| | QDax, float64 | 8.094 | 0.822 | -124.7 | 3 683 559 |
-| CMA-MAE | QualityDiversity.jl | 0.391 | 0.458 | -96.0 | 2 632 049 |
-| | pyribs | 2.301 | 0.561 | -120.6 | 2 992 796 |
-| CMA-MAE, covariance update of pyribs | QualityDiversity.jl | 0.409 | 0.560 | -111.2 | 2 992 945 |
-
-QDax has no CMA-MAE.
-
-QualityDiversity.jl is five to seven times faster than pyribs and 22 to 28 times
-faster than QDax on this CPU run. The QDax time says little about QDax on an accelerator, which
-this does not measure: each QDax step here is a batch of 12, far too small to use one.
+Median over 11 runs on one core. QualityDiversity.jl is five to seven times faster than
+pyribs and 22 to 28 times faster than QDax (0.29 s, 2.0 s and 8.1 s for CMA-ME with
+improvement emitters; 0.39 s and 2.3 s for CMA-MAE, which QDax does not have). The QDax time
+says little about QDax on an accelerator, which this does not measure: each QDax step here is
+a batch of 12, far too small to use one. Coverage and QD score are those of the archive of the
+best solutions (QD-score offset 820).
 
 ### Where the libraries agree and differ
 
@@ -374,13 +255,10 @@ descriptor of one fixed solution, as a check that the problems agree.
 
 ### Results
 
-Median over the runs. The MOQD score is the sum over the cells of the hypervolume of their fronts, and the global
-hypervolume is that of the Pareto front of all solutions together.
-
-| library | median s | evals/s | coverage | MOQD score | global hypervolume | largest cell hypervolume | solutions |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| QualityDiversity.jl | 0.019 | 5 208 489 | 0.328 | 15 288 619 | 139 936 | 135 294 | 1 411 |
-| QDax | 413 | 242 | 0.323 | 15 208 862 | 139 921 | 135 348 | 1 352 |
+Median over the runs. The MOQD score is the sum over the cells of the hypervolume of their
+fronts, and the global hypervolume is that of the Pareto front of all solutions together.
+QualityDiversity.jl takes 0.019 s and QDax 413 s. Coverage is 0.328 and 0.323, the MOQD score
+15.29 and 15.21 million, and the global hypervolume 139 936 and 139 921.
 
 The results agree. The global hypervolume and the hypervolume of the best cell are equal to within
 0.01% and 0.04%. Coverage and MOQD score are noisy from run to run: over 30 seeds the coverage of
@@ -432,80 +310,15 @@ on a GPU. The CPU runs of the first section were made on the same machine.
 
 ### Results
 
-![MAP-Elites on a GPU: time against batch size for QualityDiversity.jl and QDax](../../docs/src/assets/speed-map-elites-gpu.svg)
-
-Median time in seconds for the whole budget:
-
-| batch size | QualityDiversity.jl, float32 | QDax, float32 | QDax, grid index, float32 | QualityDiversity.jl, float64 | QDax, float64 | QDax, grid index, float64 |
-|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.210 | 1.334 | 1.346 | 1.224 | 1.576 | 1.453 |
-| 100 | 0.421 | 0.478 | 0.483 | 0.466 | 0.596 | 0.523 |
-| 1000 | 0.047 | 0.048 | 0.048 | 0.075 | 0.097 | 0.052 |
-| 10 000 | 0.0051 | 0.0056 | 0.0049 | 0.0088 | 0.048 | 0.0065 |
-
-On the GPU the two libraries are level in `float32` at every batch size. Each step costs
-both about 0.1 ms whatever the batch size, so up to a batch of 100 the GPU is slower than
-one CPU core, and at 1000 and above it is faster: at 10 000 the whole budget of 360 000
-evaluations takes 5 ms, 31 times less than one core and 14 times less than eight (the
-`float32` rows of the first section). In `float64` QDax with its own cell lookup slows
-down at large batches, because it compares every descriptor with every centroid and this
-card computes `float64` slowly; QDax with the grid index is faster than
-QualityDiversity.jl at 1000 and 10 000 in `float64`. Coverage and QD score agree with the
-CPU runs within the spread between seeds.
-
-**QualityDiversity.jl, GPU, float32**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.0706 | 1.2101 | 1.1393–1.2680 | 297 501 | 0.986 | -132.6 | 4 772 875 |
-| 100 | 0.4069 | 0.4207 | 0.4109–0.4744 | 855 692 | 0.986 | -131.4 | 4 787 345 |
-| 1000 | 0.0410 | 0.0467 | 0.0418–0.0538 | 7 705 882 | 0.985 | -130.9 | 4 794 021 |
-| 10 000 | 0.0051 | 0.0051 | 0.0051–0.0052 | 70 112 256 | 0.938 | -131.9 | 4 608 536 |
-
-**QualityDiversity.jl, GPU, float64**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.1563 | 1.2243 | 1.2161–1.2675 | 294 048 | 0.986 | -137.5 | 4 787 136 |
-| 100 | 0.4387 | 0.4660 | 0.4472–0.5109 | 772 551 | 0.987 | -131.7 | 4 783 865 |
-| 1000 | 0.0700 | 0.0748 | 0.0735–0.0771 | 4 814 409 | 0.986 | -137.4 | 4 794 253 |
-| 10 000 | 0.0086 | 0.0088 | 0.0087–0.0090 | 41 115 918 | 0.944 | -128.9 | 4 622 224 |
-
-**QDax, GPU, float32, centroid search**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.326 | 1.334 | 1.331–1.337 | 269 864 | 0.987 | -133.9 | 4 780 142 |
-| 100 | 0.474 | 0.478 | 0.477–0.478 | 753 641 | 0.987 | -133.7 | 4 789 104 |
-| 1000 | 0.047 | 0.048 | 0.048–0.048 | 7 555 599 | 0.985 | -131.8 | 4 788 820 |
-| 10 000 | 0.006 | 0.006 | 0.006–0.006 | 64 501 960 | 0.944 | -127.8 | 4 627 217 |
-
-**QDax, GPU, float32, grid index**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.341 | 1.346 | 1.343–1.347 | 267 480 | 0.987 | -131.1 | 4 780 142 |
-| 100 | 0.482 | 0.483 | 0.483–0.483 | 745 377 | 0.988 | -136.9 | 4 789 584 |
-| 1000 | 0.048 | 0.048 | 0.048–0.048 | 7 450 632 | 0.985 | -133.2 | 4 788 820 |
-| 10 000 | 0.005 | 0.005 | 0.005–0.005 | 73 649 994 | 0.944 | -127.8 | 4 627 217 |
-
-**QDax, GPU, float64, centroid search**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.576 | 1.576 | 1.576–1.576 | 228 428 | 0.986 | -133.5 | 4 780 745 |
-| 100 | 0.596 | 0.596 | 0.596–0.596 | 604 013 | 0.985 | -133.4 | 4 771 358 |
-| 1000 | 0.097 | 0.097 | 0.097–0.097 | 3 728 486 | 0.986 | -131.9 | 4 795 016 |
-| 10 000 | 0.048 | 0.048 | 0.048–0.048 | 7 525 006 | 0.942 | -131.1 | 4 613 920 |
-
-**QDax, GPU, float64, grid index**
-
-| batch size | min s | median s | middle half s | evals/s | coverage | max fitness | QD score |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 | 1.453 | 1.453 | 1.453–1.453 | 247 770 | 0.986 | -133.5 | 4 780 745 |
-| 100 | 0.523 | 0.523 | 0.523–0.523 | 687 923 | 0.985 | -133.3 | 4 771 358 |
-| 1000 | 0.052 | 0.052 | 0.052–0.052 | 6 871 663 | 0.986 | -131.9 | 4 795 016 |
-| 10 000 | 0.006 | 0.006 | 0.006–0.006 | 55 583 452 | 0.942 | -131.1 | 4 613 920 |
+On the GPU the two libraries are level in `float32` at every batch size (5.1 ms and 4.9 ms
+at 10 000). Each step costs both about 0.1 ms whatever the batch size, so up to a batch of 100
+the GPU is slower than one CPU core, and at 1000 and above it is faster: at 10 000 the whole
+budget of 360 000 evaluations takes 5 ms, 31 times less than one core and 14 times less than
+eight. In `float64` QDax with its own cell lookup slows down at large batches, because it
+compares every descriptor with every centroid and this card computes `float64` slowly; QDax
+with the grid index is faster than QualityDiversity.jl at 1000 and 10 000 in `float64` (6.5 ms
+against 8.8 ms at 10 000). Coverage and QD score agree with the CPU runs within the spread
+between seeds.
 
 ### CVT archive
 
@@ -516,14 +329,7 @@ every centroid, and QualityDiversity.jl with the centroids of its bucket in a gr
 built once on the host (about 9 here). Both find the same cells as the grid, and the
 `float32` runs of the two QualityDiversity.jl archives give identical QD scores.
 
-| batch size | QualityDiversity.jl, CVT, float32 | QDax, centroid search, float32 | QualityDiversity.jl, CVT, float64 | QDax, centroid search, float64 |
-|---:|---:|---:|---:|---:|
-| 36 | 1.347 | 1.334 | 1.545 | 1.576 |
-| 100 | 0.542 | 0.478 | 0.592 | 0.596 |
-| 1000 | 0.065 | 0.048 | 0.096 | 0.097 |
-| 10 000 | 0.0151 | 0.0056 | 0.0189 | 0.048 |
-
-In `float32` QDax is faster from a batch of 100, 2.7 times at 10 000. The device archives
+In `float32` QDax is faster from a batch of 100, 2.7 times at 10 000 (15 ms against 5.6 ms). The device archives
 keep descriptors in `Float64` and find the nearest centroid in `Float64`, so that host and
 device assign the same cells, and this card computes `Float64` slowly; the CVT archive also
 pays for a second kernel per step. In `float64` the two are level up to a batch of 1000,
@@ -539,15 +345,9 @@ samples and updates the searches on the host threads and evaluates and adds all 
 candidates on the GPU as one batch, so each search sees the archive as it was before the
 round; the host `CMAME` steps its searches one after another.
 
-| searches | host, median s | device, median s | host, QD score | device, QD score |
-|---:|---:|---:|---:|---:|
-| 5 | 1.281 | 4.922 | 5 035 124 | 5 035 042 |
-| 50 | 1.322 | 0.831 | 5 037 730 | 5 037 605 |
-| 500 | 2.248 | 0.329 | 5 033 974 | 5 033 762 |
-
 With the 5 searches of the CMA-ME paper a round is a batch of 60, too small for a GPU, and
-the device emitter is 3.8 times slower. With 500 searches it is 6.8 times faster than the
-host with as many searches, and 3.9 times faster than the host with 5. The QD scores agree
+the device emitter is 3.8 times slower (4.9 s against 1.3 s). With 500 searches it is 6.8 times faster than the
+host with as many searches (0.33 s against 2.2 s), and 3.9 times faster than the host with 5. The QD scores agree
 within the spread between seeds. QDax runs one emitter of its pool per step, so it has no
 counterpart; pyribs adds the batches of all its emitters at once, on the CPU.
 

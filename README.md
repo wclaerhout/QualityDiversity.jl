@@ -106,7 +106,7 @@ and emitters are checked against pyribs and QDax on the same inputs.
 
 ## Speed
 
-![MAP-Elites on one CPU core: time against batch size for QualityDiversity.jl, pyribs and QDax](docs/src/assets/speed-map-elites-cpu.svg)
+![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](docs/src/assets/speed-algorithms.svg)
 
 `benchmark/compare` runs the same problems in QualityDiversity.jl, pyribs and QDax; its
 [README](benchmark/compare/README.md) has the settings and results. On one CPU core,

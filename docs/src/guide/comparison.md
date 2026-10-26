@@ -53,7 +53,7 @@ are broken, the docstring of the type says which rule this package follows and w
 and CMA-MAE on Rastrigin with 20 parameters and a 100 × 100 grid, MOME, and MAP-Elites
 and CMA-ME on a GPU. Its
 [README](https://github.com/wclaerhout/QualityDiversity.jl/blob/main/benchmark/compare/README.md)
-gives the settings, the full results and how to reproduce them. In short, on one CPU
+gives the settings, the data of every run and how to reproduce them. In short, on one CPU
 core:
 
 - MAP-Elites is 2 to 14 times faster than pyribs, most at small batches. It is faster
@@ -63,11 +63,9 @@ core:
 - CMA-ME is 5 to 7 times faster than pyribs and CMA-MAE 6 times;
 - on a GPU, MAP-Elites is level with QDax in `float32`.
 
-![MAP-Elites on one CPU core: time against batch size for QualityDiversity.jl, pyribs and QDax](../assets/speed-map-elites-cpu.svg)
+![Median time of MAP-Elites, CMA-ME, CMA-MAE and MOME on one CPU core and of MAP-Elites on a GPU, for QualityDiversity.jl, pyribs and QDax](../assets/speed-algorithms.svg)
 
-![CMA-ME, CMA-MAE and MOME on one CPU core: median time of each library](../assets/speed-algorithms-cpu.svg)
-
-![MAP-Elites on a GPU: time against batch size for QualityDiversity.jl and QDax](../assets/speed-map-elites-gpu.svg)
+![MAP-Elites: time against batch size on one CPU core and on a GPU, in float64 and float32](../assets/speed-map-elites.svg)
 
 The objective in these benchmarks takes nanoseconds, so the numbers measure the library.
 With an expensive objective the evaluation dominates and the libraries differ little.
