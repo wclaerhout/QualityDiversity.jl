@@ -111,20 +111,24 @@ end
         # one call per strategy: `allocated` would update twice
         update_bytes(es, order, parents) = @allocated QD.update!(es, order, parents)
         update_bytes(deepcopy(es), order, 2)
-        free = Bool[]
-        for _ in 1:6
+        checked = 0
+        # (generation, bytes of each copy) for every generation in which all copies allocated
+        allocating = Tuple{Int,Vector{Int}}[]
+        for generation in 1:6
             QD.sample!(rng, es)
             parents = es.batch_size ÷ 2
             # The least of three copies: `@allocated` also counts what a collection that
             # happens during the call allocates, such as finalizers of earlier tests.
             copies = [deepcopy(es) for _ in 1:3]
-            bytes = minimum(c -> update_bytes(c, order, parents), copies)
+            bytes = [update_bytes(c, order, parents) for c in copies]
             QD.update!(es, order, parents)
             # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
             strategy === QD.CMAES && es.eigen_eval == es.count_eval && continue
-            push!(free, bytes == 0)
+            checked += 1
+            minimum(bytes) == 0 || push!(allocating, (generation, bytes))
         end
-        @test !isempty(free) && all(free)
+        @test checked > 0
+        @test (nameof(strategy), allocating) == (nameof(strategy), [])
     end
 end
 
