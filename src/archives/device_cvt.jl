@@ -143,7 +143,7 @@ A [`CVTArchive`](@ref) on the host with the centroids, bounds, `outside` policy 
 of `archive`, for the functions that need a host archive, such as plotting. Its genotypes
 are `Vector{T}`.
 """
-function CVTArchive(archive::DeviceCVTArchive{T,F}) where {T,F}
+function CVTArchive(archive::DeviceCVTArchive{T,F}) where {T<:AbstractFloat,F<:Real}
     host = CVTArchive{Vector{T},F}(archive.centroids, descriptor_bounds(archive); outside=archive.outside)
     return copy_elites!(host, archive)
 end
