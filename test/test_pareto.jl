@@ -237,6 +237,38 @@ end
     @test QD.qd_score(a) ≈ sum(a.volumes) && a.volume_sum + a.volume_sum_error ≈ sum(a.volumes)
     @test QD.global_hypervolume(a) ≈ hypervolume(reduce(vcat, values(fronts)), [0.0, 0.0])
     @test QD.global_hypervolume(a) <= QD.qd_score(a) + 1e-12
+    @test QD.max_hypervolume(a) == maximum(a.volumes)
+end
+
+@testset "fronts of three objectives under random batches, $duplicates, $full_front" for duplicates in (QD.RejectDuplicates(), QD.KeepDuplicates()),
+                                                                                             full_front in (QD.RejectNewcomer(), QD.ReplaceCrowded())
+    rng = Xoshiro(6)
+    a = pareto_archive(; dims=(2, 2), ref=[0.0, 0.0, 0.0], max_front=5, duplicates, full_front)
+    one_by_one = deepcopy(a)
+    largest = Float64[]
+    for _ in 1:80
+        n = rand(rng, 1:12)
+        xs = [rand(rng, 1) for _ in 1:n]
+        # objectives on a coarse lattice, so that ties and equal objective vectors occur
+        evs = [Evaluation(SVector{3}(round.(rand(rng, 3) .* 4; digits=1)), SVector(rand(rng, 2)...)) for _ in 1:n]
+        before = deepcopy(a)
+        results = QD.add_batch!(a, xs, evs)
+        @test results == [QD.add!(deepcopy(before), x, ev) for (x, ev) in zip(xs, evs)]
+        foreach((x, ev) -> QD.add!(one_by_one, x, ev), xs, evs)
+        push!(largest, QD.max_hypervolume(a))
+        @test QD.max_hypervolume(a) == maximum(a.volumes)
+    end
+    @test sort(collect(QD.elites(a)); by=e -> (e[2].descriptor, e[2].fitness)) ==
+          sort(collect(QD.elites(one_by_one)); by=e -> (e[2].descriptor, e[2].fitness))
+    fronts = Dict{Int,Vector{SVector{3,Float64}}}()
+    for (_, ev) in QD.elites(a)
+        push!(get!(fronts, QD.cell_index(a, ev.descriptor), SVector{3,Float64}[]), ev.fitness)
+    end
+    for (i, front) in fronts
+        @test a.volumes[i] ≈ hypervolume(front, [0.0, 0.0, 0.0])
+    end
+    # only replacing a crowded solution can lower the largest hypervolume of a cell
+    full_front isa QD.RejectNewcomer && @test issorted(largest)
 end
 
 @testset "ParetoGridArchive add_batch!" begin

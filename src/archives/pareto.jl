@@ -115,8 +115,9 @@ fronts; it takes no offset. [`coverage`](@ref) is the fraction of cells that are
 [`global_hypervolume`](@ref) the hypervolume of the Pareto front of all the solutions.
 `max_fitness` and `mean_fitness` are not defined for several objectives.
 
-The hypervolume of a front is recomputed whenever a cell changes. It takes no allocation
-for two objectives; for more it does allocate.
+The hypervolume of a front is computed, without allocating, when a solution is offered to
+its cell, and once more in a batch for a solution whose cell an earlier solution of the batch
+changed.
 
 # Example
 
@@ -154,12 +155,18 @@ mutable struct ParetoGridArchive{G,M,N,O<:OutsidePolicy,P,U<:DuplicatePolicy,R<:
     # Hypervolume of the front of every cell, and the cells that are occupied.
     const volumes::Vector{Float64}
     const occupied_idx::Vector{Int}
+    # Number of times the front of every cell has changed.
+    const versions::Vector{Int}
     # Running total of `volumes` over the cells, and the rounding error of the sum.
     volume_sum::Float64
     volume_sum_error::Float64
+    # Largest entry of `volumes` over the occupied cells.
+    max_volume::Float64
     num_solutions::Int
-    # Workspace for the hypervolume and the crowding distances of one front.
+    # Workspace for the hypervolume and the crowding distances of one front; `slices[d-1]`
+    # holds the points of a slab in the first `d` objectives.
     const scratch::Vector{SVector{M,Float64}}
+    const slices::Vector{Vector{SVector{M,Float64}}}
     const crowding::Vector{Float64}
     const order::Vector{Int}
 
@@ -181,8 +188,9 @@ mutable struct ParetoGridArchive{G,M,N,O<:OutsidePolicy,P,U<:DuplicatePolicy,R<:
                               Vector{P}(undef, slots),
                               Vector{SVector{M,Float64}}(undef, slots),
                               Vector{SVector{N,Float64}}(undef, slots),
-                              zeros(ncells), Int[], 0.0, 0.0, 0,
+                              zeros(ncells), Int[], zeros(Int, ncells), 0.0, 0.0, 0.0, 0,
                               Vector{SVector{M,Float64}}(undef, max_front + 1),
+                              [Vector{SVector{M,Float64}}(undef, max_front + 1) for _ in 2:M],
                               Vector{Float64}(undef, max_front + 1), Vector{Int}(undef, max_front + 1))
     end
 end
@@ -256,34 +264,73 @@ function objectives(archive::ParetoGridArchive{G,M}, ev::Evaluation) where {G,M}
     return f
 end
 
-# Hypervolume of the `m` points in `scratch`.
-function scratch_volume(archive::ParetoGridArchive{G,2}, m) where {G}
-    scratch = archive.scratch
+# Hypervolume of the `m` points in `scratch`, which it may reorder.
+scratch_volume(archive::ParetoGridArchive{G,2}, m) where {G} =
+    staircase!(archive.scratch, m, archive.reference_point)
+
+function scratch_volume(archive::ParetoGridArchive{G,M}, m) where {G,M}
     ref = archive.reference_point
-    # Insertion sort by decreasing first objective; the points are few.
+    points = archive.slices[M-1]
+    n = 0
+    for k in 1:m
+        point = archive.scratch[k]
+        if all(point .> ref)
+            n += 1
+            points[n] = point
+        end
+    end
+    return slab_volume!(archive.slices, n, ref, M)
+end
+
+# Insertion sort of the first `m` points by decreasing objective `d`, stable; the points
+# are few.
+function sort_decreasing!(points, m, d)
     for a in 2:m
-        point = scratch[a]
+        point = points[a]
         b = a - 1
-        while b >= 1 && scratch[b][1] < point[1]
-            scratch[b+1] = scratch[b]
+        while b >= 1 && points[b][d] < point[d]
+            points[b+1] = points[b]
             b -= 1
         end
-        scratch[b+1] = point
+        points[b+1] = point
     end
+    return points
+end
+
+# Area above `ref` of the first `m` points in the first two objectives, sorting them.
+function staircase!(points, m, ref)
+    sort_decreasing!(points, m, 1)
     area = 0.0
     height = ref[2]
     for a in 1:m
-        point = scratch[a]
+        point = points[a]
         point[1] > ref[1] && point[2] > ref[2] || continue
         height = max(height, point[2])
-        next = a < m ? max(scratch[a+1][1], ref[1]) : ref[1]
+        next = a < m ? max(points[a+1][1], ref[1]) : ref[1]
         area += (point[1] - next) * (height - ref[2])
     end
     return area
 end
 
-function scratch_volume(archive::ParetoGridArchive, m)
-    return hypervolume((archive.scratch[k] for k in 1:m), archive.reference_point)
+# Volume above `ref` of the first `n` points of `slices[d-1]`, all above `ref`, in the first
+# `d` objectives: the slabs of `hypervolume` along objective `d`, each measured from a copy
+# of its points in `slices[d-2]`.
+function slab_volume!(slices, n, ref, d)
+    points = slices[d-1]
+    d == 2 && return staircase!(points, n, ref)
+    sort_decreasing!(points, n, d)
+    lower = slices[d-2]
+    volume = 0.0
+    for i in 1:n
+        top = points[i][d]
+        bottom = i < n ? points[i+1][d] : ref[d]
+        top > bottom || continue
+        for k in 1:i
+            lower[k] = points[k]
+        end
+        volume += (top - bottom) * slab_volume!(slices, i, ref, d - 1)
+    end
+    return volume
 end
 
 # A stored solution with objectives `g` keeps out a new one with objectives `f`.
@@ -291,15 +338,16 @@ blocks(::RejectDuplicates, g, f) = weakly_dominates(g, f)
 blocks(::KeepDuplicates, g, f) = dominates(g, f)
 
 # What adding a solution with objectives `f` to cell `i` does, without changing the
-# archive: the status and the hypervolume that the cell gains, and the position in the
-# front of the solution removed to make room for it (`0` for none).
+# archive: the status and the hypervolume that the cell gains, the position in the front
+# of the solution removed to make room for it (`0` for none), and the hypervolume of the
+# new front (`0` when rejected).
 function front_outcome(archive::ParetoGridArchive, i, f)
     n = archive.counts[i]
     base = (i - 1) * archive.max_front
     kept = 0
     for k in 1:n
         g = archive.fitness[base+k]
-        blocks(archive.duplicates, g, f) && return AddResult(Rejected, 0.0), 0
+        blocks(archive.duplicates, g, f) && return AddResult(Rejected, 0.0), 0, 0.0
         if !dominates(f, g)
             kept += 1
             archive.scratch[kept] = g
@@ -311,11 +359,11 @@ function front_outcome(archive::ParetoGridArchive, i, f)
         # The front is full and the new solution beats none of it, so `scratch[k]` holds
         # the objectives of its `k`-th solution.
         remove = make_room(archive.full_front, archive, kept + 1)
-        remove == kept + 1 && return AddResult(Rejected, 0.0), 0
+        remove == kept + 1 && return AddResult(Rejected, 0.0), 0, 0.0
         archive.scratch[remove] = f
     end
-    gain = scratch_volume(archive, remove == 0 ? kept + 1 : kept) - archive.volumes[i]
-    return AddResult(n == 0 ? NewCell : Improved, gain), remove
+    volume = scratch_volume(archive, remove == 0 ? kept + 1 : kept)
+    return AddResult(n == 0 ? NewCell : Improved, volume - archive.volumes[i]), remove, volume
 end
 
 # Which of the `m` points in `scratch` leaves a full front; the last of them is the new
@@ -362,9 +410,9 @@ function crowding_distances!(archive::ParetoGridArchive{G,M}, m) where {G,M}
 end
 
 # Puts a solution that `front_outcome` accepted into cell `i`, removing the solution at
-# position `remove` of the front (none for `0`), and returns the change in the
-# hypervolume of the cell.
-function insert_front!(archive::ParetoGridArchive, i, x, f, descriptor, phenotype, remove)
+# position `remove` of the front (none for `0`); `volume` is the hypervolume of the new
+# front, which `front_outcome` computed.
+function insert_front!(archive::ParetoGridArchive, i, x, f, descriptor, phenotype, remove, volume)
     n = archive.counts[i]
     base = (i - 1) * archive.max_front
     kept = 0
@@ -378,26 +426,30 @@ function insert_front!(archive::ParetoGridArchive, i, x, f, descriptor, phenotyp
             archive.fitness[base+kept] = g
             archive.descriptors[base+kept] = archive.descriptors[base+k]
         end
-        archive.scratch[kept] = g
     end
     archive.genotypes[base+kept+1] = x
     store_phenotype!(archive.phenotypes, base + kept + 1, phenotype)
     archive.fitness[base+kept+1] = f
     archive.descriptors[base+kept+1] = descriptor
-    archive.scratch[kept+1] = f
     n == 0 && push!(archive.occupied_idx, i)
     archive.counts[i] = kept + 1
+    archive.versions[i] += 1
     archive.num_solutions += kept + 1 - n
-    volume = scratch_volume(archive, kept + 1)
     previous = archive.volumes[i]
     archive.volumes[i] = volume
+    if volume >= archive.max_volume
+        archive.max_volume = volume
+    elseif previous == archive.max_volume
+        # The largest front lost hypervolume, which `ReplaceCrowded` allows.
+        archive.max_volume = maximum(archive.volumes[c] for c in archive.occupied_idx)
+    end
     # Added and subtracted as two compensated steps: their difference would round,
     # outside the compensation.
     archive.volume_sum, archive.volume_sum_error =
         compensated_add(archive.volume_sum, archive.volume_sum_error, volume)
     archive.volume_sum, archive.volume_sum_error =
         compensated_add(archive.volume_sum, archive.volume_sum_error, -previous)
-    return volume - previous
+    return archive
 end
 
 """
@@ -411,9 +463,9 @@ function add!(archive::ParetoGridArchive{G,M,N,O,P}, x, ev::Evaluation) where {G
     f = objectives(archive, ev)    # throws before the archive changes
     i = cell_index(archive, ev.descriptor)
     i == 0 && return outside_result(Float64)
-    result, remove = front_outcome(archive, i, f)
+    result, remove, volume = front_outcome(archive, i, f)
     result.status == Rejected && return result
-    insert_front!(archive, i, x, f, stored_descriptor(archive, ev.descriptor), phenotype, remove)
+    insert_front!(archive, i, x, f, stored_descriptor(archive, ev.descriptor), phenotype, remove, volume)
     return result
 end
 
@@ -437,22 +489,36 @@ function add_batch!(archive::ParetoGridArchive{G,M,N,O,P}, xs::AbstractVector,
     results = Vector{AddResult{Float64}}(undef, n)
     cells = Vector{Int}(undef, n)
     fitness = Vector{eltype(archive.fitness)}(undef, n)
+    # What `front_outcome` found against the archive before the batch, and the version of
+    # the cell then, so that it is computed again only for a cell that changed since.
+    removes = Vector{Int}(undef, n)
+    volumes = Vector{Float64}(undef, n)
+    versions = Vector{Int}(undef, n)
     for k in 1:n
         # Both checks throw before the archive changes.
         fitness[k] = objectives(archive, evs[k])
         stored_phenotype(P, evs[k].phenotype)
         i = cell_index(archive, evs[k].descriptor)
         cells[k] = i
-        results[k] = i == 0 ? outside_result(Float64) : first(front_outcome(archive, i, fitness[k]))
+        if i == 0
+            results[k] = outside_result(Float64)
+        else
+            results[k], removes[k], volumes[k] = front_outcome(archive, i, fitness[k])
+            versions[k] = archive.versions[i]
+        end
     end
     for k in 1:n
         i = cells[k]
         i == 0 && continue
-        # The front may have changed since the result: offered by now, as `add!` would.
-        outcome, remove = front_outcome(archive, i, fitness[k])
-        outcome.status == Rejected && continue
+        status, remove, volume = results[k].status, removes[k], volumes[k]
+        if archive.versions[i] != versions[k]
+            # The front changed earlier in the batch: offered by now, as `add!` would.
+            outcome, remove, volume = front_outcome(archive, i, fitness[k])
+            status = outcome.status
+        end
+        status == Rejected && continue
         insert_front!(archive, i, xs[k], fitness[k], stored_descriptor(archive, evs[k].descriptor),
-                      stored_phenotype(P, evs[k].phenotype), remove)
+                      stored_phenotype(P, evs[k].phenotype), remove, volume)
     end
     return results
 end
@@ -486,6 +552,7 @@ function Base.empty!(archive::ParetoGridArchive)
     empty!(archive.occupied_idx)
     archive.volume_sum = 0.0
     archive.volume_sum_error = 0.0
+    archive.max_volume = 0.0
     archive.num_solutions = 0
     return archive
 end
@@ -504,7 +571,7 @@ archive.
 """
 function max_hypervolume(archive::ParetoGridArchive)
     isempty_archive(archive, "max_hypervolume")
-    return maximum(archive.volumes[i] for i in archive.occupied_idx)
+    return archive.max_volume
 end
 
 """
