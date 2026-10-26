@@ -8,7 +8,7 @@ and a dominated point adds nothing. The empty set has volume `0`.
 
 For two objectives it sorts the points and adds the areas of the steps under them. For
 more it slices along the last objective and takes the hypervolume of each slice, which
-takes time of the order of `n^(m-1)` for `n` points and `m` objectives and suits the
+takes time of the order of `n^(m-1) log n` for `n` points and `m` objectives and suits the
 small sets that a Pareto front in a cell has.
 
 # Example

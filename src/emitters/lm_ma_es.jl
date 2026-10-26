@@ -52,6 +52,12 @@ mutable struct LMMAES <: AbstractEvolutionStrategy
     z::Matrix{Float64}
     y::Matrix{Float64}
     x::Matrix{Float64}
+    # Scratch space for an update: the recombination weights, the draws of the parents, and
+    # the weighted means of their `z` and of their `y`.
+    const weights::Vector{Float64}
+    const chosen::Matrix{Float64}
+    const z_mean::Vector{Float64}
+    const y_mean::Vector{Float64}
 end
 
 function LMMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_size(dim),
@@ -65,7 +71,8 @@ function LMMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_si
     return LMMAES(Int(dim), Int(batch_size), Int(n_vectors), Float64(sigma0), lo, hi,
                   2 * batch_size / dim, c_d, c_c, zeros(dim), Float64(sigma0), zeros(dim),
                   zeros(dim, n_vectors), 0,
-                  zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim, batch_size))
+                  zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim, batch_size),
+                  zeros(batch_size), zeros(dim, batch_size), zeros(dim), zeros(dim))
 end
 
 # See #45: pyribs accepts any batch up to the dimension.
@@ -130,18 +137,17 @@ function update!(es::LMMAES, order::AbstractVector{<:Integer}, parents::Integer)
         throw(ArgumentError("parents must be between 0 and $(es.batch_size), got $parents"))
     es.generation += 1
     parents == 0 && return es
-    weights = recombination_weights(parents)
+    weights = recombination_weights!(es.weights, parents)
     mueff = 1 / sum(abs2, weights)
-    chosen = order[1:parents]
 
-    z_mean = es.z[:, chosen] * weights
-    es.mean .+= es.sigma .* (es.y[:, chosen] * weights)
+    z_mean = mul!(es.z_mean, chosen_columns!(es.chosen, es.z, order, parents), weights)
+    es.mean .+= es.sigma .* mul!(es.y_mean, chosen_columns!(es.chosen, es.y, order, parents), weights)
 
     c_sigma = es.c_sigma
     es.path_sigma .= (1 - c_sigma) .* es.path_sigma .+ sqrt(mueff * c_sigma * (2 - c_sigma)) .* z_mean
     for j in 1:es.n_vectors
         c = es.c_c[j]
-        es.vectors[:, j] .= (1 - c) .* es.vectors[:, j] .+ sqrt(mueff * c * (2 - c)) .* z_mean
+        @views es.vectors[:, j] .= (1 - c) .* es.vectors[:, j] .+ sqrt(mueff * c * (2 - c)) .* z_mean
     end
     es.sigma *= exp(c_sigma / 2 * (sum(abs2, es.path_sigma) / es.dim - 1))
     return es

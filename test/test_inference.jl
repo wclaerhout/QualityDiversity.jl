@@ -101,6 +101,29 @@ end
     end
 end
 
+@testset "evolution-strategy updates do not allocate" begin
+    for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100))
+        es = strategy(dim; sigma0=0.5)
+        order = collect(1:es.batch_size)
+        rng = Xoshiro(1)
+        QD.sample!(rng, es)
+        QD.update!(es, order, 3)
+        # one call per generation: `allocated` would update twice
+        update_bytes(es, order, parents) = @allocated QD.update!(es, order, parents)
+        update_bytes(deepcopy(es), order, 2)
+        free = Bool[]
+        for _ in 1:6
+            QD.sample!(rng, es)
+            # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
+            recomputed = strategy === QD.CMAES ? es.eigen_eval : nothing
+            bytes = update_bytes(es, order, es.batch_size ÷ 2)
+            strategy === QD.CMAES && es.eigen_eval != recomputed && continue
+            push!(free, bytes == 0)
+        end
+        @test !isempty(free) && all(free)
+    end
+end
+
 @testset "inference with several emitters" begin
     prob = Rastrigin(4)
     archive = GridArchive(prob; dims=(5, 5))
@@ -341,6 +364,15 @@ end
     @test r.status == QD.Improved && QD.num_solutions(crowded) == 3
     @test allocated(QD.add!, crowded, 5, on_line(0.65)) == 0
     @test allocated(QD.add!, crowded, 6, on_line(0.15)) == 0
+    # nor does a front of three objectives
+    three = ParetoGridArchive{Int}((1,), ((0, 1),); reference_point=[0.0, 0.0, 0.0], max_front=4, full_front=QD.ReplaceCrowded())
+    on_plane(s, t) = Evaluation(SVector(s, t, 1 - s - t), SVector(0.5))
+    for (k, (s, t)) in enumerate(((0.1, 0.1), (0.6, 0.2), (0.2, 0.6), (0.3, 0.3)))
+        QD.add!(three, k, on_plane(s, t))
+    end
+    @test allocated(QD.add!, three, 5, on_plane(0.4, 0.4)) == 0
+    @test allocated(QD.add!, three, 6, on_plane(0.05, 0.05)) == 0
+    @test allocated(QD.max_hypervolume, three) == 0
 end
 
 @testset "differentiable QD inference and allocations" begin
