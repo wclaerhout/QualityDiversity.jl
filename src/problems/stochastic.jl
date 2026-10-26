@@ -32,7 +32,7 @@ struct StochasticQDProblem{F,I,S} <: AbstractStochasticQDProblem
 end
 
 StochasticQDProblem(f; init, bounds=nothing, categories=nothing) =
-    StochasticQDProblem(f, init, descriptor_space(bounds, categories))
+    StochasticQDProblem(f, init, problem_space(bounds, categories))
 
 evaluate(rng::AbstractRNG, prob::StochasticQDProblem, x) = evaluation_of(prob.space, prob.f(rng, x))
 

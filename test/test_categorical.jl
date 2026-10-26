@@ -103,7 +103,7 @@ end
     prob = QDProblem(x -> (-sum(abs2, x), (length(x), x[1] > 0 ? :up : :down));
                      init=rng -> randn(rng, 2), categories=(1:3, [:up, :down]))
     @test QD.descriptor_categories(prob) == (1:3, [:up, :down])
-    @test !hasmethod(QD.descriptor_bounds, Tuple{typeof(prob)})
+    @test QD.descriptor_bounds(prob) === nothing
     ev = QD.evaluate(prob, [1.0, 2.0])
     @test ev.fitness == -5.0 && ev.descriptor === (2, :up)
     @test QD.evaluate(prob, [-1.0]).descriptor === (1, :down)
@@ -116,7 +116,7 @@ end
           CategoricalArchive{Vector{Float32},Float32,Tuple{Int,Symbol},<:Any,<:Any,RejectOutside}
 
     bounded = QDProblem(identity; init=identity, bounds=((0, 1),))
-    @test !hasmethod(QD.descriptor_categories, Tuple{typeof(bounded)})
+    @test QD.descriptor_categories(bounded) === nothing
     @test QD.descriptor_ndims(bounded) == 1
     @test_throws "defines no descriptor_categories" CategoricalArchive(bounded)
     @test_throws "descriptor has 3 dimensions but the problem categories have 2" QD.evaluate(

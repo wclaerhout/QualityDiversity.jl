@@ -176,6 +176,7 @@ end
     struct NoBounds <: AbstractQDProblem end
     @test_throws "NoBounds does not define descriptor_bounds" QD.problem_bounds(NoBounds(), nothing)
     @test QD.problem_bounds(NoBounds(), ((0, 1),)) == ((0, 1),)
+    @test_throws "NoBounds defines neither descriptor_bounds nor descriptor_categories" QD.descriptor_ndims(NoBounds())
 
     # a problem whose random solutions leave the bounds no longer fails on the first step
     wide = QDProblem(x -> (-sum(abs2, x), (x[1], x[2])); init=rng -> 4 .* randn(rng, 2), bounds=((-1, 1), (-1, 1)))
@@ -189,4 +190,26 @@ end
                     DeviceGridArchive(prob; dims=(2, 2), device=Array))
         @test archive.outside === ThrowOutside()
     end
+end
+
+# A problem of its own type with discrete descriptors, not a `QDProblem`.
+struct Shapes <: AbstractQDProblem end
+QD.evaluate(::Shapes, x) = Evaluation(sum(x), (x[1] > 0 ? 1 : 2, :round))
+QD.random_solution(rng, ::Shapes) = randn(rng, 2)
+QD.descriptor_categories(::Shapes) = (1:2, [:round, :square])
+
+@testset "descriptor spaces" begin
+    # the fallbacks mark what a problem or an archive does not have
+    @test QD.descriptor_categories(Rastrigin(4)) === nothing
+    @test QD.descriptor_bounds(Shapes()) === nothing
+    @test QD.descriptor_bounds(UnstructuredArchive(2; capacity=3, novelty_threshold=1)) === nothing
+    @test (@inferred QD.descriptor_space(Rastrigin(4))) == QD.descriptor_bounds(Rastrigin(4))
+    @test (@inferred QD.descriptor_space(Shapes())) isa QD.DescriptorCategories
+    @test QD.descriptor_ndims(Shapes()) == 2 && QD.descriptor_ndims(Rastrigin(4)) == 2
+    # a problem that defines only descriptor_categories gets a CategoricalArchive
+    alg = @inferred MAPElites(Shapes(); batch_size=4)
+    @test alg.archive isa CategoricalArchive && alg.archive.outside === ThrowOutside()
+    @test length(solve(Shapes(), alg; budget=40, rng=Xoshiro(1)).archive) >= 1
+    @test_throws "has descriptor_categories, not descriptor_bounds" GridArchive(Shapes(); dims=(2, 2))
+    @test_throws "needs real descriptors, but Shapes has descriptor_categories" init(Shapes(), CMAMEGA(Shapes(); dims=(2, 2), sigma0=1.0, bounds=((0, 1), (0, 1))); budget=10)
 end

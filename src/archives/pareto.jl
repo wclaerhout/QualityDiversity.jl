@@ -253,10 +253,13 @@ weakly_dominates(a::SVector{M}, b::SVector{M}) where {M} = all(a .>= b)
 # `a` is at least as large as `b` in every objective and larger in one.
 dominates(a::SVector{M}, b::SVector{M}) where {M} = all(a .>= b) && any(a .> b)
 
-function objectives(archive::ParetoGridArchive{G,M}, ev::Evaluation) where {G,M}
-    fitness = ev.fitness
-    fitness isa AbstractVector ||
-        throw(ArgumentError("the fitness of a solution must be a vector of $M objectives for a ParetoGridArchive, got a $(typeof(fitness))"))
+objectives(archive::ParetoGridArchive, ev::Evaluation) = objectives(archive, ev.fitness)
+
+function objectives(archive::ParetoGridArchive{G,M}, fitness) where {G,M}
+    throw(ArgumentError("the fitness of a solution must be a vector of $M objectives for a ParetoGridArchive, got a $(typeof(fitness))"))
+end
+
+function objectives(archive::ParetoGridArchive{G,M}, fitness::AbstractVector) where {G,M}
     length(fitness) == M ||
         throw(ArgumentError("fitness has $(length(fitness)) objectives but the archive has $M"))
     f = SVector{M,Float64}(fitness)

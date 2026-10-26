@@ -175,12 +175,12 @@ function cqd_score(rng::AbstractRNG, archive::AbstractArchive{G,F,SVector{N,Floa
     return cqd_score(archive; targets, kwargs...)
 end
 
-# The descriptor bounds of `archive`, or an error that says to pass them, for an archive
-# that only has the fallback method that throws.
+# The descriptor bounds of `archive`, or an error that says to pass them.
 function archive_bounds(archive, hint)
-    which(descriptor_bounds, Tuple{typeof(archive)}) === which(descriptor_bounds, Tuple{AbstractArchive}) &&
+    bounds = descriptor_bounds(archive)
+    bounds === nothing &&
         throw(ArgumentError("$(nameof(typeof(archive))) does not report the bounds of its descriptor space; $hint"))
-    return descriptor_bounds(archive)
+    return bounds
 end
 
 function bounds_diagonal(archive)

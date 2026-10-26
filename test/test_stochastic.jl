@@ -100,7 +100,7 @@ end
     # what the wrapper takes from the wrapped problem
     @test QD.descriptor_bounds(sampled) == QD.descriptor_bounds(prob)
     @test QD.fitness_offset(sampled) == 0
-    @test !hasmethod(QD.descriptor_categories, Tuple{typeof(sampled)})
+    @test QD.descriptor_categories(sampled) === nothing
     @test QD.random_solution(Xoshiro(2), sampled) == QD.random_solution(Xoshiro(2), prob)
 
     @test_throws "num_samples must be at least 1, got 0" Sampled(prob; num_samples=0)
