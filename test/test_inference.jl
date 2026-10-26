@@ -108,16 +108,20 @@ end
         rng = Xoshiro(1)
         QD.sample!(rng, es)
         QD.update!(es, order, 3)
-        # one call per generation: `allocated` would update twice
+        # one call per strategy: `allocated` would update twice
         update_bytes(es, order, parents) = @allocated QD.update!(es, order, parents)
         update_bytes(deepcopy(es), order, 2)
         free = Bool[]
         for _ in 1:6
             QD.sample!(rng, es)
+            parents = es.batch_size ÷ 2
+            # The least of three copies: `@allocated` also counts what a collection that
+            # happens during the call allocates, such as finalizers of earlier tests.
+            copies = [deepcopy(es) for _ in 1:3]
+            bytes = minimum(c -> update_bytes(c, order, parents), copies)
+            QD.update!(es, order, parents)
             # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
-            recomputed = strategy === QD.CMAES ? es.eigen_eval : nothing
-            bytes = update_bytes(es, order, es.batch_size ÷ 2)
-            strategy === QD.CMAES && es.eigen_eval != recomputed && continue
+            strategy === QD.CMAES && es.eigen_eval == es.count_eval && continue
             push!(free, bytes == 0)
         end
         @test !isempty(free) && all(free)
