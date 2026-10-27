@@ -120,7 +120,7 @@ function update!(es::OpenAIES, order::AbstractVector{<:Integer}, parents::Intege
 
     es.steps += 1
     es.moment1 .= es.beta1 .* es.moment1 .+ (1 - es.beta1) .* gradient
-    es.moment2 .= es.beta2 .* es.moment2 .+ (1 - es.beta2) .* gradient .^ 2
+    es.moment2 .= es.beta2 .* es.moment2 .+ (1 - es.beta2) .* abs2.(gradient)
     scale = es.learning_rate * sqrt(1 - es.beta2^es.steps) / (1 - es.beta1^es.steps)
     step = es.step
     step .= scale .* es.moment1 ./ (sqrt.(es.moment2) .+ es.epsilon)
