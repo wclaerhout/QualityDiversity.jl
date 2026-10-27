@@ -175,8 +175,8 @@ solutions of all emitters at once, and QDax runs one emitter of its pool per ste
 ### Results
 
 Median over 11 runs on one core. QualityDiversity.jl is five to seven times faster than
-pyribs and 22 to 28 times faster than QDax (0.29 s, 2.0 s and 8.1 s for CMA-ME with
-improvement emitters; 0.39 s and 2.3 s for CMA-MAE, which QDax does not have). The QDax time
+pyribs and 23 to 29 times faster than QDax (0.29 s, 2.0 s and 8.1 s for CMA-ME with
+improvement emitters; 0.37 s and 2.3 s for CMA-MAE, which QDax does not have). The QDax time
 says little about QDax on an accelerator, which this does not measure: each QDax step here is
 a batch of 12, far too small to use one. Coverage and QD score are those of the archive of the
 best solutions (QD-score offset 820).
@@ -311,14 +311,14 @@ on a GPU. The CPU runs of the first section were made on the same machine.
 
 ### Results
 
-On the GPU the two libraries are level in `float32` at every batch size (5.1 ms and 4.9 ms
-at 10 000). Each step costs both about 0.1 ms whatever the batch size, so up to a batch of 100
-the GPU is slower than one CPU core, and at 1000 and above it is faster: at 10 000 the whole
-budget of 360 000 evaluations takes 5 ms, 31 times less than one core and 14 times less than
-eight. In `float64` QDax with its own cell lookup slows down at large batches, because it
+On the GPU the two libraries are level in `float32` up to a batch of 1000, and at 10 000 QDax
+is 1.16 times faster (5.6 ms against 4.9 ms). Each step costs both about 0.1 ms whatever the
+batch size, so up to a batch of 100 the GPU is slower than one CPU core, and at 1000 and above
+it is faster: at 10 000 the whole budget of 360 000 evaluations takes 5.6 ms, 28 times less
+than one core and 12 times less than eight. In `float64` QDax with its own cell lookup slows down at large batches, because it
 compares every descriptor with every centroid and this card computes `float64` slowly; QDax
 with the grid index is faster than QualityDiversity.jl at 1000 and 10 000 in `float64` (6.5 ms
-against 8.8 ms at 10 000). Coverage and QD score agree with the CPU runs within the spread
+against 8.9 ms at 10 000). Coverage and QD score agree with the CPU runs within the spread
 between seeds.
 
 ### CVT archive
@@ -347,8 +347,8 @@ candidates on the GPU as one batch, so each search sees the archive as it was be
 round; the host `CMAME` steps its searches one after another.
 
 With the 5 searches of the CMA-ME paper a round is a batch of 60, too small for a GPU, and
-the device emitter is 3.8 times slower (4.9 s against 1.3 s). With 500 searches it is 6.8 times faster than the
-host with as many searches (0.33 s against 2.2 s), and 3.9 times faster than the host with 5. The QD scores agree
+the device emitter is 4.0 times slower (5.0 s against 1.2 s). With 500 searches it is 6.4 times faster than the
+host with as many searches (0.35 s against 2.2 s), and 3.6 times faster than the host with 5. The QD scores agree
 within the spread between seeds. QDax runs one emitter of its pool per step, so it has no
 counterpart; pyribs adds the batches of all its emitters at once, on the CPU.
 

@@ -147,6 +147,6 @@ the device that differs from the CPU one in the last digits.
 
 A GPU pays off for large batches. On the benchmark of the
 [comparison](comparison.md), MAP-Elites with batches of 100 or fewer is faster on one
-CPU core than on a GPU, and with batches of 10 000 the GPU is about 26 times faster.
+CPU core than on a GPU, and with batches of 10 000 the GPU is about 28 times faster in `float32`.
 A device CMA-ME is slower than the CPU with the five searches of the default and
 faster with hundreds.
