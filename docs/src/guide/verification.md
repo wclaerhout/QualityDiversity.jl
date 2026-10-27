@@ -33,7 +33,7 @@ The table names the strongest check that passes.
 | [`ThresholdArchive`](@ref) | pyribs `GridArchive` with `learning_rate` | Reference | Equal. |
 | [`UnstructuredArchive`](@ref) | pyribs `ProximityArchive` (one neighbor, local competition); QDax `UnstructuredRepertoire` | Reference (pyribs) | Equal to pyribs, one solution at a time. QDax keeps far more solutions, closer together than its threshold: [#81](https://github.com/wclaerhout/QualityDiversity.jl/issues/81). |
 | [`DNSArchive`](@ref) | pyribs `DNSArchive`, QDax `DominatedNoveltyRepertoire` | Reference | Equal to both. |
-| [`DensityArchive`](@ref) | pyribs `DensityArchive` (QDax has none) | Reference | Equal densities. A whole DDS run differs: see Algorithms. |
+| [`DensityArchive`](@ref) | pyribs `DensityArchive` (QDax has none) | Reference | Equal densities. pyribs's reservoir sampling replaces the wrong elements when it replaces several in one batch; this package follows Li (1994). See DDS under Algorithms. |
 | [`ParetoGridArchive`](@ref) | QDax `MOMERepertoire`, MOME-PGX, pymoo | Reference | Equal fronts and hypervolumes. By default, solutions with equal fitness vectors are not stored twice ([`RejectDuplicates`](@ref QualityDiversity.RejectDuplicates)); [`KeepDuplicates`](@ref QualityDiversity.KeepDuplicates) gives QDax's behavior. |
 | [`SpreadArchive`](@ref) | QDax `MELSRepertoire` | Reference | Equal. |
 | [`GradientArchive`](@ref) | through OMG-MEGA, below | Reference | Equal. |
@@ -55,7 +55,7 @@ The table names the strongest check that passes.
 | [`VariationEmitter`](@ref) | pyribs, QDax | Whole run | MAP-Elites on Rastrigin agrees with both at every batch size. |
 | [`CMAEmitter`](@ref): rankers, selection, restarts | pyribs `EvolutionStrategyEmitter` | Reference | Statuses, ranking keys, parent counts and restarts equal for six rankers, both selection rules and three restart rules. Candidates with equal keys are ordered differently: this package puts the earlier one first, pyribs the later one (and, for the objective ranker, an arbitrary one). |
 | [`CMAES`](@ref QualityDiversity.CMAES) | the CMA-ES tutorial (Hansen, 2016) | Paper | Equal. pyribs's CMA-ES departs from the tutorial in five places: the rank-one weight `c1²`, an evolution path `p_c` not divided by `σ`, a step-size update `(‖p_σ‖²/n − 1)/2`, another `h_σ` test, and a lazily updated eigendecomposition. |
-| [`PyribsCMAES`](@ref QualityDiversity.PyribsCMAES) | pyribs `CMAEvolutionStrategy` | Whole run | Reaches pyribs's coverage in CMA-MAE runs, but copies only the `c1²` of the five differences, so its state differs from pyribs's after a few generations: [#79](https://github.com/wclaerhout/QualityDiversity.jl/issues/79). |
+| [`PyribsCMAES`](@ref QualityDiversity.PyribsCMAES) | pyribs `CMAEvolutionStrategy` | Reference | Equal mean, step size, covariance and paths to 1e-15 over a short run and a 20-generation run, with the eigendecomposition recomputed in the same generations. It copies all five differences; see [`PyribsCMA`](@ref QualityDiversity.PyribsCMA). |
 | [`SepCMAES`](@ref QualityDiversity.SepCMAES) | Ros and Hansen (2008) with pycma's constants | Paper | Equal. pyribs's sep-CMA-ES uses other learning rates than pycma, besides the differences of its CMA-ES: [#83](https://github.com/wclaerhout/QualityDiversity.jl/issues/83). |
 | [`LMMAES`](@ref QualityDiversity.LMMAES) | the paper; pyribs `LMMAEvolutionStrategy` | Reference | Equal to both. |
 | [`OpenAIES`](@ref QualityDiversity.OpenAIES) | the paper; pyribs `OpenAIEvolutionStrategy` | Reference | Equal to both. |
@@ -88,7 +88,8 @@ equal.
 | [`CMAMEGA`](@ref) | pyribs | Agree. |
 | [`MOME`](@ref) | QDax | Agree, with equal global hypervolume. |
 | [`MELS`](@ref) | QDax | QDax reaches slightly higher coverage and lower best fitness: [#82](https://github.com/wclaerhout/QualityDiversity.jl/issues/82). |
-| [`DDS`](@ref) | pyribs | Lower coverage than pyribs: [#80](https://github.com/wclaerhout/QualityDiversity.jl/issues/80). |
+| [`DDS`](@ref) | pyribs | With `strategy=PyribsCMAES`, agrees with pyribs once pyribs's reservoir sampling is corrected (coverage 0.89–0.90 against 0.87–0.92 on 20-dimensional Rastrigin); pyribs as released reaches 0.76–0.80. With the default `CMAES`, searches that leave the box of `Rastrigin` seldom restart (coverage 0.66–0.70); with the box as `lower` and `upper`, 0.90–0.92. pyribs also restarts every search after its first round, in which the buffer is empty and every batch has density zero. |
 
 The default settings of the algorithm constructors follow pyribs's emitter defaults, not
-always those of the papers: [#86](https://github.com/wclaerhout/QualityDiversity.jl/issues/86).
+always those of the papers; the docstring of each constructor gives the settings of its
+paper.

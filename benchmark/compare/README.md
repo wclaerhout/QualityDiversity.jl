@@ -200,12 +200,13 @@ best solutions (QD-score offset 820).
   covariance matrix adapts almost only through the rank-mu term and the search stays
   rounder for longer, which helps CMA-MAE fill the grid. QualityDiversity.jl follows
   the textbook update. The CMA-MAE paper ran all its experiments with pyribs. With
-  `strategy=QualityDiversity.PyribsCMAES`, which only changes that coefficient, QualityDiversity.jl
-  reaches 0.560 coverage and a QD score of 2.99 million, as pyribs does (0.561 and 2.99
-  million). Swapping the textbook term into pyribs lowers its CMA-MAE
-  coverage to about 0.46, and the step size rule and the scaling of the path make
-  no difference. CMA-ME with improvement emitters is the same with either update
-  (QD scores 4.65 million with the textbook term and 4.66 million with the pyribs term).
+  `strategy=QualityDiversity.PyribsCMAES`, which copies pyribs's update, QualityDiversity.jl
+  reaches 0.571 coverage and a QD score of 3.06 million, close to pyribs (0.561 and 2.99
+  million). The rank-one term is what matters: swapping the textbook term into pyribs
+  lowers its CMA-MAE coverage to about 0.46, while pyribs's other departures from the
+  tutorial (the step size rule, the scaling of the path) make no difference. CMA-ME with
+  improvement emitters is the same with either update (QD scores 4.65 million with the
+  textbook update and 4.65 million with pyribs's).
 - **Random direction ranking.** The CMA-ME paper ranks the accepted solutions by
   their projection on the direction, without putting new cells first. pyribs and
   `TwoStageRandomDirectionRanker` rank new cells first; `AcceptedRandomDirectionRanker`
