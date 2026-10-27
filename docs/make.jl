@@ -47,6 +47,7 @@ makedocs(;
             "guide/extending.md",
             "guide/gpu.md",
             "guide/comparison.md",
+            "guide/verification.md",
         ],
         "API reference" => [
             "api/problems.md",

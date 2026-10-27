@@ -1,3 +1,5 @@
+include("reference/grid.jl")
+
 @testset "GridArchive construction" begin
     a = GridArchive((4, 5), ((0, 1), (-1, 1)))
     @test a isa GridArchive{Vector{Float64},Float64,2}
@@ -333,4 +335,38 @@ end
     two_terms = BigFloat(a.fitness_sum) + BigFloat(a.fitness_sum_error)
     @test abs(two_terms - exact) <= 1e-24 * exact    # the rounded differences would give about 1e-17
     @test qd_score(a) == Float64(exact)
+end
+
+@testset "GridArchive matches pyribs and QDax" begin
+    # reference/grid.jl: the cells, statuses and improvements that pyribs's GridArchive
+    # reports for a sequence of batches, the elites that it and QDax's MapElitesRepertoire
+    # keep after each batch, and the metrics of both
+    pyribs_status = Dict(0 => QD.Rejected, 1 => QD.Improved, 2 => QD.NewCell)
+    c = grid_case
+    a = GridArchive(c.dims, c.bounds)
+    descriptor(i) = SVector{2}(c.descriptors[:, i])
+    cells = CartesianIndices(c.dims)
+    @test all(Tuple(cells[QD.cell_index(a, descriptor(i))]) == Tuple(c.grid_index[:, i] .+ 1)
+              for i in eachindex(c.fitness))
+    numbers(a) = sort([Int(only(x)) for (x, _) in QD.elites(a)])
+    statuses, values = QD.AddStatus[], Float64[]
+    for b in 1:length(c.fitness)÷c.batch
+        ids = (b-1)*c.batch+1:b*c.batch
+        rs = QD.add_batch!(a, [[Float64(i)] for i in ids], [Evaluation(c.fitness[i], descriptor(i)) for i in ids])
+        append!(statuses, [r.status for r in rs])
+        append!(values, [r.improvement for r in rs])
+        @test numbers(a) == c.elites[b] == c.qdax_elites[b]
+        # pyribs subtracts its offset from every fitness and QDax adds its offset
+        elites, cov, score, normalized, best, average = c.stats[:, b]
+        @test length(a) == elites && coverage(a) ≈ cov
+        @test qd_score(a; offset=-c.offset) ≈ score rtol = 1e-12
+        @test qd_score(a; offset=-c.offset) / QD.capacity(a) ≈ normalized rtol = 1e-12
+        @test max_fitness(a) == best
+        @test mean_fitness(a) ≈ average rtol = 1e-12
+        qdax_score, qdax_coverage, qdax_best = c.qdax_metrics[:, b]
+        @test qd_score(a; offset=-c.offset) ≈ qdax_score rtol = 1e-12
+        @test 100 * coverage(a) ≈ qdax_coverage && max_fitness(a) == qdax_best
+    end
+    @test statuses == [pyribs_status[s] for s in c.statuses]
+    @test values ≈ c.values rtol = 1e-12
 end

@@ -1,3 +1,5 @@
+include("reference/cvt.jl")
+
 using StaticArrays: SVector, setindex
 
 brute_nearest(points, q) = argmin([sum(abs2, p - q) for p in points])
@@ -199,4 +201,16 @@ end
             @test QD.nearest(tree, q) == argmin(distances)
         end
     end
+end
+
+@testset "CVTArchive finds the cells of pyribs and QDax" begin
+    # reference/cvt.jl: the cells of pyribs's CVTArchive, which clips a descriptor to the
+    # bounds first, and of QDax's get_cells_indices, which does not, for fixed centroids
+    c = cvt_case
+    centroids = [SVector{3}(c.centroids[:, i]) for i in axes(c.centroids, 2)]
+    descriptors = [SVector{3}(c.descriptors[:, i]) for i in axes(c.descriptors, 2)]
+    clamped = CVTArchive(centroids, ((0, 1), (0, 1), (0, 1)); outside=ClampOutside())
+    @test [QD.cell_index(clamped, d) for d in descriptors] == c.pyribs .+ 1
+    wide = CVTArchive(centroids, ((-1, 2), (-1, 2), (-1, 2)))
+    @test [QD.cell_index(wide, d) for d in descriptors] == c.qdax .+ 1
 end

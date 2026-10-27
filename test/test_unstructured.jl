@@ -1,3 +1,5 @@
+include("reference/unstructured.jl")
+
 brute_nearest_slot(archive, d) =
     argmin([sum(abs2, SVector{2,Float64}(d) - e.descriptor) for (_, e) in QD.elites(archive)])
 
@@ -246,4 +248,24 @@ end
     empty!(a)
     @test length(a) == 0 && a.tree_size == 0 && a.num_pending == 0
     @test QD.add!(a, [1.0], Evaluation(1.0, zero(SVector{N,Float64}))).status == QD.NewCell
+end
+
+@testset "UnstructuredArchive matches pyribs's ProximityArchive" begin
+    # reference/unstructured.jl: the statuses, improvements and stored solutions of
+    # pyribs's ProximityArchive with one neighbor and local competition, after each
+    # solution of a sequence added one at a time
+    pyribs_status = Dict(0 => QD.Rejected, 1 => QD.Improved, 2 => QD.NewCell)
+    c = unstructured_case
+    a = UnstructuredArchive(2; capacity=length(c.fitness), novelty_threshold=c.threshold)
+    numbers(a) = sort([Int(only(x)) for (x, _) in QD.elites(a)])
+    statuses, values, stored = QD.AddStatus[], Float64[], Bool[]
+    for i in eachindex(c.fitness)
+        r = QD.add!(a, [Float64(i)], Evaluation(c.fitness[i], SVector{2}(c.descriptors[:, i])))
+        push!(statuses, r.status)
+        push!(values, r.improvement)
+        push!(stored, numbers(a) == c.elites[i])
+    end
+    @test statuses == [pyribs_status[s] for s in c.statuses]
+    @test values ≈ c.values rtol = 1e-12
+    @test all(stored)
 end

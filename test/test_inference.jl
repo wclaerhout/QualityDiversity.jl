@@ -1,6 +1,8 @@
 # Calls on the hot path infer a concrete type and, for isbits genotypes, do not
 # allocate. Measurements are taken inside functions after a warm-up call.
 
+using Profile: Profile
+
 function allocated(f::F, args::Vararg{Any,N}) where {F,N}
     f(args...)
     return @allocated f(args...)
@@ -101,6 +103,26 @@ end
     end
 end
 
+# Logs the type, size and call stack of every allocation in one update of `es`, for a
+# strategy whose update allocates.
+function report_allocations(strategy, es, order, rng)
+    c = deepcopy(es)
+    QD.sample!(rng, c)
+    parents = c.batch_size ÷ 2
+    Profile.Allocs.clear()
+    Profile.Allocs.@profile sample_rate=1 QD.update!(c, order, parents)
+    allocs = Profile.Allocs.fetch().allocs
+    Profile.Allocs.clear()
+    for a in allocs
+        # Julia frames from the allocation up to this function
+        stop = something(findfirst(f -> f.func === :report_allocations, a.stacktrace), lastindex(a.stacktrace))
+        frames = [f for f in a.stacktrace[begin:stop-1] if !f.from_c]
+        @info "$(nameof(strategy)) update! allocates $(a.size) bytes of $(a.type)" *
+              join(("\n  " * sprint(show, f) for f in frames))
+    end
+    isempty(allocs) && @info "$(nameof(strategy)) update! allocates nothing under Profile.Allocs"
+end
+
 @testset "evolution-strategy updates do not allocate" begin
     for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100))
         es = strategy(dim; sigma0=0.5)
@@ -111,20 +133,25 @@ end
         # one call per strategy: `allocated` would update twice
         update_bytes(es, order, parents) = @allocated QD.update!(es, order, parents)
         update_bytes(deepcopy(es), order, 2)
-        free = Bool[]
-        for _ in 1:6
+        checked = 0
+        # (generation, bytes of each copy) for every generation in which all copies allocated
+        allocating = Tuple{Int,Vector{Int}}[]
+        for generation in 1:6
             QD.sample!(rng, es)
             parents = es.batch_size ÷ 2
             # The least of three copies: `@allocated` also counts what a collection that
             # happens during the call allocates, such as finalizers of earlier tests.
             copies = [deepcopy(es) for _ in 1:3]
-            bytes = minimum(c -> update_bytes(c, order, parents), copies)
+            bytes = [update_bytes(c, order, parents) for c in copies]
             QD.update!(es, order, parents)
             # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
             strategy === QD.CMAES && es.eigen_eval == es.count_eval && continue
-            push!(free, bytes == 0)
+            checked += 1
+            minimum(bytes) == 0 || push!(allocating, (generation, bytes))
         end
-        @test !isempty(free) && all(free)
+        @test checked > 0
+        @test (nameof(strategy), allocating) == (nameof(strategy), [])
+        isempty(allocating) || report_allocations(strategy, es, order, rng)
     end
 end
 

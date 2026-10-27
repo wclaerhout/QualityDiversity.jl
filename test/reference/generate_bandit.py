@@ -67,7 +67,7 @@ for sizes, restarting, num_active, reselect, rounds, accept in (
         statuses.append(list(st))
         restarts.append([i + 1 for i in restarted])
     lines.append(f"    (sizes={jl(sizes)}, restarting={jl(restarting)}, num_active={num_active}, "
-                 f"reselect={'ReselectAll()' if reselect == 'all' else 'ReselectTerminated()'},")
+                 f"reselect={'QD.ReselectAll()' if reselect == 'all' else 'QD.ReselectTerminated()'},")
     lines.append("     actives=Vector{Int}[" + ", ".join(jl(a) for a in actives) + "],")
     lines.append("     statuses=Vector{Int}[" + ", ".join(jl(s) for s in statuses) + "],")
     lines.append("     restarts=Vector{Int}[" + ", ".join(jl(r) for r in restarts) + "]),")
