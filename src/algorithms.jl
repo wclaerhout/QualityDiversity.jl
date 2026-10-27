@@ -252,6 +252,14 @@ is `Random.default_rng()`, which the seed of `solve` does not set. The other arg
 those of
 [`CMAME`](@ref), without `device`: the density archive runs on the host.
 
+Density descent drives the searches toward empty regions, also out of the region where
+the problem's descriptors change. On a problem that clips its solutions to a box, such as
+`Rastrigin`, a search outside the box sees the descriptors of the edge of the box, and with
+the default `strategy` it seldom converges, so it seldom restarts. Pass the box as `lower`
+and `upper` to keep the searches inside. With `strategy=QualityDiversity.PyribsCMAES` such
+a search restarts, as in pyribs: its rank-one covariance term grows with the square of the
+step size, and the covariance matrix becomes ill-conditioned.
+
 # Example
 
 ```julia
@@ -289,8 +297,11 @@ CMA-MEGA (Fontaine and Nikolaidis, 2021, "Differentiable Quality Diversity"): a
 [`GridArchive`](@ref) with `dims` cells along each descriptor dimension, as for
 [`MAPElites`](@ref), and `num_emitters` [`GradientArborescenceEmitter`](@ref)s, which step
 along the gradients of the fitness and the descriptor. The problem must provide them; see
-[`evaluate_gradient`](@ref QualityDiversity.evaluate_gradient). The defaults are those of
-CMA-MEGA (Adam) in the paper, which runs one emitter.
+[`evaluate_gradient`](@ref QualityDiversity.evaluate_gradient). The ranking, selection
+and restart rules and the optimizer are those of CMA-MEGA (Adam) in the paper, which runs
+one emitter of 36 candidates. The default batch size is that of CMA-ES over the `N + 1`
+gradient coefficients, `4 + floor(3 log(N + 1))` for `N` descriptor dimensions, as in
+pyribs; pass `batch_size=36` for the setting of the paper.
 
 `sigma0` is the initial step size of the distribution of the gradient coefficients and has
 no default; the paper uses `10` on the sphere and Rastrigin benchmarks. The other arguments
@@ -343,7 +354,7 @@ the best half recombined, restarts on convergence only, over a [`ThresholdArchiv
 around a [`GridArchive`](@ref). `threshold_min` and `learning_rate` are those of the
 [`ThresholdArchive`](@ref); `optimizer`, the rule that moves the solution point, is that of
 the [`GradientArborescenceEmitter`](@ref)s. `solve` returns the result archive, which holds
-the best solution of every cell.
+the best solution of every cell. The default batch size is that of [`CMAMEGA`](@ref).
 """
 function CMAMAEGA(prob::AbstractQDProblem; dims::Tuple, sigma0::Real, threshold_min::Real,
                   learning_rate::Real=0.01,
@@ -371,8 +382,9 @@ whose children are gradient steps from their parents, a [`GradientArchive`](@ref
 [`GradientOperatorEmitter`](@ref). Every solution of the run is evaluated with its
 gradients; see [`evaluate_gradient`](@ref QualityDiversity.evaluate_gradient). `sigma0`, the
 standard deviation of the gradient coefficients, has no default; the paper uses `10` on the
-sphere and Rastrigin benchmarks. The other arguments are those of [`MAPElites`](@ref) and
-[`GradientOperatorEmitter`](@ref).
+sphere and Rastrigin benchmarks. The paper draws 36 children per round; the default
+`batch_size=64` is that of [`MAPElites`](@ref). The other arguments are those of
+[`MAPElites`](@ref) and [`GradientOperatorEmitter`](@ref).
 """
 function OMGMEGA(prob::AbstractQDProblem; dims::Tuple, sigma0::Real,
                  bounds::Union{Tuple,Nothing}=nothing,
@@ -415,6 +427,9 @@ can supply it with [`reference_point`](@ref QualityDiversity.reference_point). `
 one for a full front; see [`ParetoGridArchive`](@ref). With `full_front=QualityDiversity.ReplaceCrowded()` the
 archive keeps fronts as MOME-PGX does (Janmohamed et al., 2023), whose crowding-based
 selection of parents and policy-gradient variation are not part of this constructor.
+The default `variation` is that of [`MAPElites`](@ref); the MOME paper uses polynomial
+mutation with `eta=1` together with a crossover on its Rastrigin benchmarks, and
+`variation=PolynomialMutation(lower, upper; eta=1)` is the mutation alone.
 
 `solve` returns the archive, and a run records its MOQD score, coverage, the largest
 hypervolume of a cell and the number of solutions.

@@ -297,27 +297,51 @@ end
     @test vec(S === QD.CMAES ? es.cov : es.variances) ≈ ref.shape rtol = 1e-10
 end
 
-@testset "PyribsCMAES weakens the rank-one term" begin
-    n = length(cma_x0)
-    textbook = QD.CMAES(n; sigma0=cma_s0, batch_size=8)
-    pyribs = QD.PyribsCMAES(n; sigma0=cma_s0, batch_size=8)
-    @test textbook.rank_one isa QD.TextbookRankOne && pyribs.rank_one isa QD.PyribsRankOne
-    @test pyribs isa QD.CMAES && pyribs.batch_size == 8 && pyribs.sigma0 == cma_s0
-    for es in (textbook, pyribs)
-        QD.reset!(es, cma_x0)
-        load_batch!(es, columns(cma_X[1], n))
-        QD.update!(es, cma_orders[1], cma_parents[1])
+@testset "PyribsCMAES follows pyribs ($name)" for (name, x0, s0, X, orders, parents, ref) in
+        (("short run", cma_x0, cma_s0, cma_X, cma_orders, cma_parents, pyribs_cma),
+         ("long run", cmalong_x0, cmalong_s0, cmalong_X, cmalong_orders, cmalong_parents, pyribs_cmalong))
+    # reference/pyribs_strategies.jl: pyribs's CMAEvolutionStrategy fed the same batches
+    n = length(x0)
+    es = QD.PyribsCMAES(n; sigma0=s0, batch_size=length(orders[1]))
+    @test es isa QD.CMAES{QD.PyribsCMA} && es.sigma0 == s0
+    QD.reset!(es, x0)
+    eigen_evals = Int[]
+    for (g, flat) in enumerate(X)
+        push!(eigen_evals, es.eigen_eval)
+        load_batch!(es, columns(flat, n))
+        QD.update!(es, orders[g], parents[g])
     end
-    # one update from the same batch: same mean, step size and path, and a covariance
-    # that differs by (c1 - c1²) pc pcᵀ
-    c1 = QD.strategy_constants(n, cma_parents[1])[5]
-    @test pyribs.mean == textbook.mean && pyribs.sigma == textbook.sigma && pyribs.path_c == textbook.path_c
-    @test textbook.cov - pyribs.cov ≈ (c1 - c1^2) .* (textbook.path_c * textbook.path_c') atol = 1e-14
-    @test norm(textbook.path_c) > 0.1 && textbook.cov != pyribs.cov
-    @test QD.rank_one_rate(QD.TextbookRankOne(), 0.1) == 0.1 && QD.rank_one_rate(QD.PyribsRankOne(), 0.1) ≈ 0.01
-    # the variant fills an archive through an emitter
+    @test eigen_evals == ref.eigen_evals
+    @test es.mean ≈ ref.mean rtol = 1e-10
+    @test es.sigma ≈ ref.sigma rtol = 1e-10
+    @test vec(es.cov) ≈ ref.cov rtol = 1e-10
+    @test es.path_c ≈ ref.path_c rtol = 1e-10 atol = 1e-14
+    @test es.path_sigma ≈ ref.path_sigma rtol = 1e-10
+    # the textbook update ends elsewhere from the same batches
+    textbook = QD.CMAES(n; sigma0=s0, batch_size=length(orders[1]))
+    QD.reset!(textbook, x0)
+    for (g, flat) in enumerate(X)
+        load_batch!(textbook, columns(flat, n))
+        QD.update!(textbook, orders[g], parents[g])
+    end
+    @test textbook.variant isa QD.TextbookCMA && !isapprox(textbook.sigma, ref.sigma; rtol=1e-3)
+end
+
+@testset "PyribsCMAES in an emitter" begin
+    # a generation without parents still recomputes a due eigendecomposition
+    es = QD.PyribsCMAES(4; sigma0=0.5, batch_size=8)
+    QD.reset!(es, zeros(4))
+    QD.sample!(Xoshiro(2), es)
+    QD.update!(es, collect(1:8), 4)
+    es.count_eval += 1_000
+    QD.update!(es, collect(1:8), 0)
+    @test es.eigen_eval == es.count_eval
+    textbook = QD.CMAES(4; sigma0=0.5, batch_size=8)
+    textbook.count_eval = 1_000
+    QD.update!(textbook, collect(1:8), 0)
+    @test textbook.eigen_eval == 0
     prob = Sphere(6)
     alg = CMAME(prob; dims=(6, 6), sigma0=0.5, num_emitters=2, strategy=QD.PyribsCMAES)
-    @test alg.emitters[1].es isa QD.CMAES{QD.PyribsRankOne}
+    @test alg.emitters[1].es isa QD.CMAES{QD.PyribsCMA}
     @test coverage(solve(prob, alg; budget=1_000, rng=Xoshiro(1)).archive) > 0.1
 end

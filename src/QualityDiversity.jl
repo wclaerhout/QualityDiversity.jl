@@ -113,7 +113,7 @@ export qd_score, coverage, max_fitness, mean_fitness, cqd_score, hypervolume, gl
 @compat public DeviceCellArchive, DeviceBatch, EvaluationBatch, AddResultBatch
 @compat public Testing
 @compat public reset!, sample!, update!, should_stop
-@compat public RankOneRule, TextbookRankOne, PyribsRankOne
+@compat public CMAVariant, TextbookCMA, PyribsCMA
 @compat public ask, tell!, ask_gradients, tell_gradients!, batch_size, restarts, active, rank_key, reset_ranker!
 
 end

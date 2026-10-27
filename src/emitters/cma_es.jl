@@ -1,42 +1,73 @@
 """
-    RankOneRule
+    CMAVariant
 
-Supertype of the rules that set the weight of the rank-one term `c1 pc pcᵀ` in the
-covariance update of [`CMAES`](@ref): [`TextbookRankOne`](@ref) and
-[`PyribsRankOne`](@ref).
+Supertype of the variants of the update of [`CMAES`](@ref): [`TextbookCMA`](@ref), the
+default, and [`PyribsCMA`](@ref).
 """
-abstract type RankOneRule end
-
-"""
-    TextbookRankOne()
-
-The rank-one term of the covariance update with weight `c1`, as in Hansen (2016) and
-Loshchilov et al. (2019). This is the default of [`CMAES`](@ref).
-"""
-struct TextbookRankOne <: RankOneRule end
+abstract type CMAVariant end
 
 """
-    PyribsRankOne()
+    TextbookCMA()
 
-The rank-one term with weight `c1²`, which is what pyribs computes: it multiplies the
-term by `c1` twice. The term is then much weaker, and the covariance matrix adapts
-almost only through the rank-mu update, so a search stays rounder for longer. Use it
-through [`PyribsCMAES`](@ref) to compare with results produced by pyribs.
+The update of Hansen (2016), "The CMA Evolution Strategy: A Tutorial". This is the
+default of [`CMAES`](@ref).
 """
-struct PyribsRankOne <: RankOneRule end
-
-rank_one_rate(::TextbookRankOne, c1) = c1
-rank_one_rate(::PyribsRankOne, c1) = c1^2
+struct TextbookCMA <: CMAVariant end
 
 """
-    CMAES(dim; sigma0, batch_size=default, lower=-Inf, upper=Inf, rank_one=TextbookRankOne())
+    PyribsCMA()
+
+The update that pyribs 0.12.0's `CMAEvolutionStrategy` computes, which departs from the
+tutorial in five places:
+
+1. The rank-one term `pc pcᵀ` has weight `c1²`: pyribs multiplies it by `c1` twice. The
+   term is then much weaker, so a search stays rounder for longer.
+2. The evolution path `pc` accumulates the mean shift `m′ - m` itself, not divided by
+   `σ`, so the rank-one term scales with `σ²`: it vanishes for a small step size and
+   dominates the covariance for a large one.
+3. The step size changes by `exp(min(1, c_σ/d_σ (‖p_σ‖²/n - 1)/2))`, not
+   `exp(min(1, c_σ/d_σ (‖p_σ‖/χₙ - 1)))`.
+4. The path `pc` stalls unless `‖p_σ‖²/n / (1 - (1 - c_σ)^{2g}) < 2 + 4/(n + 1)`, with
+   `g` the generation, instead of `‖p_σ‖ / √(1 - (1 - c_σ)^{2g}) / χₙ < 1.4 + 2/(n + 1)`.
+5. The eigendecomposition is recomputed when more than `λ / (2 n (c1 + c_μ))`
+   evaluations have passed, with `c1` and `c_μ` those of `λ ÷ 2` parents, also after a
+   generation without parents; the matrix and its inverse square root are made
+   symmetric by the larger of each pair of entries, and the eigenvalues are taken in
+   absolute value.
+
+Use it through [`PyribsCMAES`](@ref) to reproduce results produced with pyribs.
+"""
+struct PyribsCMA <: CMAVariant end
+
+rank_one_rate(::TextbookCMA, c1) = c1
+rank_one_rate(::PyribsCMA, c1) = c1^2
+
+# Factor of the mean shift `yw`, in units of sigma, that enters the path `pc`.
+path_shift_scale(::TextbookCMA, sigma) = 1.0
+path_shift_scale(::PyribsCMA, sigma) = sigma
+
+# Whether the path `pc` keeps growing, from the norm of `p_σ` and `decay = 1 - (1 - c_σ)^{2g}`.
+path_grows(::TextbookCMA, norm_ps, decay, chi_n, n) = norm_ps / sqrt(decay) / chi_n < 1.4 + 2 / (n + 1)
+path_grows(::PyribsCMA, norm_ps, decay, chi_n, n) = norm_ps^2 / n / decay < 2 + 4 / (n + 1)
+
+step_size_factor(::TextbookCMA, cs, damps, norm_ps, chi_n, n) = exp(min(1.0, (cs / damps) * (norm_ps / chi_n - 1)))
+step_size_factor(::PyribsCMA, cs, damps, norm_ps, chi_n, n) = exp(min(1.0, (cs / damps) * (norm_ps^2 / n - 1) / 2))
+
+symmetric_entry(::TextbookCMA, a, b) = (a + b) / 2
+symmetric_entry(::PyribsCMA, a, b) = max(a, b)
+
+stored_eigenvalue(::TextbookCMA, value) = max(value, floatmin(Float64))
+stored_eigenvalue(::PyribsCMA, value) = max(abs(value), floatmin(Float64))
+
+"""
+    CMAES(dim; sigma0, batch_size=default, lower=-Inf, upper=Inf, variant=TextbookCMA())
 
 Covariance matrix adaptation evolution strategy (Hansen and Ostermeier, 2001;
 Hansen, 2016, "The CMA Evolution Strategy: A Tutorial"), maximizing. It keeps a
 Gaussian search distribution with mean `m`, step size `σ` and covariance `C`, and
-is the default optimizer inside a [`CMAEmitter`](@ref). `rank_one`, a
-[`RankOneRule`](@ref), sets the weight of the rank-one covariance term;
-[`PyribsCMAES`](@ref) is the variant that reproduces pyribs.
+is the default optimizer inside a [`CMAEmitter`](@ref). `variant`, a
+[`CMAVariant`](@ref), chooses the update: the tutorial's, or pyribs's through
+[`PyribsCMAES`](@ref).
 
 A generation has two calls. `sample!(rng, es)` draws `batch_size` solutions,
 `x = m + σ B D z` with `z` standard normal and `C = B D² Bᵀ`, and leaves them in
@@ -56,7 +87,7 @@ matrix with a condition number above `1e14`, a distribution that has shrunk belo
 flat: the best and the worst are within `1e-12` of each other. `reset!(es, x0)`
 restarts the search at `x0`.
 """
-mutable struct CMAES{R<:RankOneRule} <: AbstractEvolutionStrategy
+mutable struct CMAES{V<:CMAVariant} <: AbstractEvolutionStrategy
     const dim::Int
     const batch_size::Int
     const sigma0::Float64
@@ -90,11 +121,11 @@ mutable struct CMAES{R<:RankOneRule} <: AbstractEvolutionStrategy
     const shift::Vector{Float64}
     const whitened::Vector{Float64}
     const scaled_basis::Matrix{Float64}
-    const rank_one::R
+    const variant::V
 end
 
 function CMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_size(dim),
-               lower=-Inf, upper=Inf, rank_one::RankOneRule=TextbookRankOne())
+               lower=-Inf, upper=Inf, variant::CMAVariant=TextbookCMA())
     lo, hi = check_strategy_arguments(dim, sigma0, batch_size, lower, upper)
     es = CMAES(Int(dim), Int(batch_size), Float64(sigma0), lo, hi,
                zeros(dim), Float64(sigma0), Matrix{Float64}(I, dim, dim),
@@ -102,7 +133,7 @@ function CMAES(dim::Integer; sigma0::Real, batch_size::Integer=default_batch_siz
                zeros(dim), zeros(dim), 0, 0,
                zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim), zeros(dim),
                zeros(batch_size), zeros(dim, batch_size), zeros(dim, batch_size), zeros(dim),
-               zeros(dim), zeros(dim, dim), rank_one)
+               zeros(dim), zeros(dim, dim), variant)
     return es
 end
 
@@ -192,7 +223,7 @@ function update!(es::CMAES, order::AbstractVector{<:Integer}, parents::Integer)
     0 <= parents <= es.batch_size ||
         throw(ArgumentError("parents must be between 0 and $(es.batch_size), got $parents"))
     es.count_eval += es.batch_size
-    parents == 0 && return es
+    parents == 0 && return skip_parents!(es.variant, es)
     n = es.dim
     weights, mueff, cc, cs, c1, cmu, damps = strategy_constants(n, recombination_weights!(es.weights, parents))
     chi_n = sqrt(n) * (1 - 1 / (4n) + 1 / (21n^2))
@@ -206,13 +237,14 @@ function update!(es::CMAES, order::AbstractVector{<:Integer}, parents::Integer)
     es.path_sigma .= (1 - cs) .* es.path_sigma .+ sqrt(cs * (2 - cs) * mueff) .* es.whitened
     norm_ps = norm(es.path_sigma)
     decay = 1 - (1 - cs)^(2 * es.count_eval / es.batch_size)
-    hsig = norm_ps / sqrt(decay) / chi_n < 1.4 + 2 / (n + 1) ? 1.0 : 0.0
-    es.path_c .= (1 - cc) .* es.path_c .+ hsig * sqrt(cc * (2 - cc) * mueff) .* yw
+    hsig = path_grows(es.variant, norm_ps, decay, chi_n, n) ? 1.0 : 0.0
+    shift_scale = path_shift_scale(es.variant, es.sigma)
+    es.path_c .= (1 - cc) .* es.path_c .+ (hsig * sqrt(cc * (2 - cc) * mueff) * shift_scale) .* yw
 
     # Covariance: rank-one update from the path and rank-mu update from the parents.
     delta = (1 - hsig) * cc * (2 - cc)
     es.cov .*= 1 + c1 * delta - c1 - cmu
-    rate = rank_one_rate(es.rank_one, c1)
+    rate = rank_one_rate(es.variant, c1)
     for j in 1:n, i in 1:n
         es.cov[i, j] += rate * (es.path_c[i] * es.path_c[j])
     end
@@ -220,29 +252,51 @@ function update!(es::CMAES, order::AbstractVector{<:Integer}, parents::Integer)
     weighted .= ys .* weights'
     mul!(es.cov, weighted, ys', cmu, 1.0)
 
-    es.sigma *= exp(min(1.0, (cs / damps) * (norm_ps / chi_n - 1)))
+    es.sigma *= step_size_factor(es.variant, cs, damps, norm_ps, chi_n, n)
 
-    # The decomposition is only recomputed now and then; it costs O(n^3).
-    if es.count_eval - es.eigen_eval > es.batch_size / ((c1 + cmu) * n * 10)
-        update_eigensystem!(es)
-    end
+    eigen_due(es.variant, es, c1, cmu) && update_eigensystem!(es)
+    return es
+end
+
+# Whether the eigendecomposition is to be recomputed; it costs O(n^3), so it is only
+# recomputed now and then.
+eigen_due(::TextbookCMA, es, c1, cmu) = es.count_eval - es.eigen_eval > es.batch_size / ((c1 + cmu) * es.dim * 10)
+
+function eigen_due(::PyribsCMA, es, _, _)
+    # pyribs's interval uses the constants of `batch_size ÷ 2` parents, whatever the
+    # number of parents of the generation.
+    _, _, _, _, c1, cmu, _ = strategy_constants(es.dim, recombination_weights!(es.weights, es.batch_size ÷ 2))
+    return es.count_eval - es.eigen_eval > es.batch_size / (2 * es.dim * (c1 + cmu))
+end
+
+# A generation without parents leaves the distribution as it is; pyribs still recomputes
+# a decomposition that is due.
+skip_parents!(::TextbookCMA, es) = es
+
+function skip_parents!(variant::PyribsCMA, es)
+    eigen_due(variant, es, nothing, nothing) && update_eigensystem!(es)
     return es
 end
 
 function update_eigensystem!(es::CMAES)
     n = es.dim
     for j in 1:n, i in 1:j-1
-        es.cov[i, j] = es.cov[j, i] = (es.cov[i, j] + es.cov[j, i]) / 2
+        es.cov[i, j] = es.cov[j, i] = symmetric_entry(es.variant, es.cov[i, j], es.cov[j, i])
     end
     # `eigen!` overwrites its argument, so it gets a copy in a buffer that is free until the
     # decomposition is read.
     es.scaled_basis .= es.cov
     decomposition = eigen!(Symmetric(es.scaled_basis))
     if all(isfinite, decomposition.values) && all(isfinite, decomposition.vectors)
-        es.eigenvalues .= max.(decomposition.values, floatmin(Float64))
+        for i in 1:n
+            es.eigenvalues[i] = stored_eigenvalue(es.variant, decomposition.values[i])
+        end
         es.basis .= decomposition.vectors
         es.scaled_basis .= es.basis .* (1 ./ sqrt.(es.eigenvalues))'
         mul!(es.inv_sqrt, es.scaled_basis, es.basis')
+        for j in 1:n, i in 1:j-1
+            es.inv_sqrt[i, j] = es.inv_sqrt[j, i] = symmetric_entry(es.variant, es.inv_sqrt[i, j], es.inv_sqrt[j, i])
+        end
     else
         es.eigenvalues .= NaN
     end
@@ -263,10 +317,11 @@ end
 """
     PyribsCMAES(dim; sigma0, batch_size=default, lower=-Inf, upper=Inf)
 
-[`CMAES`](@ref) with the rank-one covariance weight of pyribs, `c1²` instead of `c1`;
-see [`PyribsRankOne`](@ref). It exists to reproduce results that were produced with
-pyribs, such as those of the CMA-MAE paper, where it makes a search explore with rounder
+[`CMAES`](@ref) with the update of pyribs 0.12.0, [`PyribsCMA`](@ref): given the same
+batches and rankings, its state equals that of pyribs's `CMAEvolutionStrategy` up to
+rounding. It exists to reproduce results that were produced with pyribs, such as those of
+the CMA-MAE paper, where its weak rank-one term makes a search explore with rounder
 distributions. Pass it as `strategy=QualityDiversity.PyribsCMAES` to a [`CMAEmitter`](@ref),
 [`CMAME`](@ref) or [`CMAMAE`](@ref).
 """
-PyribsCMAES(dim::Integer; kwargs...) = CMAES(dim; kwargs..., rank_one=PyribsRankOne())
+PyribsCMAES(dim::Integer; kwargs...) = CMAES(dim; kwargs..., variant=PyribsCMA())

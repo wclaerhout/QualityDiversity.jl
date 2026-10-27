@@ -124,7 +124,8 @@ function report_allocations(strategy, es, order, rng)
 end
 
 @testset "evolution-strategy updates do not allocate" begin
-    for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100))
+    for (strategy, dim) in ((QD.SepCMAES, 20), (QD.LMMAES, 40), (QD.OpenAIES, 20), (QD.CMAES, 100),
+                            (QD.PyribsCMAES, 100))
         es = strategy(dim; sigma0=0.5)
         order = collect(1:es.batch_size)
         rng = Xoshiro(1)
@@ -145,7 +146,7 @@ end
             bytes = [update_bytes(c, order, parents) for c in copies]
             QD.update!(es, order, parents)
             # CMA-ES allocates only in the eigendecomposition, which it skips in some generations
-            strategy === QD.CMAES && es.eigen_eval == es.count_eval && continue
+            es isa QD.CMAES && es.eigen_eval == es.count_eval && continue
             checked += 1
             minimum(bytes) == 0 || push!(allocating, (generation, bytes))
         end

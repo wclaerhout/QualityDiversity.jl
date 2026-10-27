@@ -42,9 +42,9 @@ QualityDiversity.reset!
 QualityDiversity.sample!
 QualityDiversity.update!
 QualityDiversity.should_stop
-QualityDiversity.RankOneRule
-QualityDiversity.TextbookRankOne
-QualityDiversity.PyribsRankOne
+QualityDiversity.CMAVariant
+QualityDiversity.TextbookCMA
+QualityDiversity.PyribsCMA
 ```
 
 ### Rankers
