@@ -95,6 +95,7 @@ export qd_score, coverage, max_fitness, mean_fitness, cqd_score, hypervolume, gl
 @compat public Benchmarks
 @compat public AddStatus, AddResult, QDState, QDResult, CQDScore, num_solutions, max_hypervolume, max_scores
 @compat public Expectation, Average, Median
+@compat public CentroidSeeding, KMeansPlusPlus, GreedyKMeansPlusPlus
 @compat public OutsidePolicy, DuplicatePolicy, RejectDuplicates, KeepDuplicates, FullFrontPolicy, RejectNewcomer, ReplaceCrowded
 @compat public DeviceVariationEmitter, DeviceCMAEmitter
 @compat public GradientOptimizer, AdamAscent, GradientAscent

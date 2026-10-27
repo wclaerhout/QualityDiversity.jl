@@ -33,6 +33,14 @@ QualityDiversity.centroids
 CategoricalArchive
 ```
 
+## Seeding the k-means of a CVT archive
+
+```@docs
+QualityDiversity.CentroidSeeding
+QualityDiversity.KMeansPlusPlus
+QualityDiversity.GreedyKMeansPlusPlus
+```
+
 ## Descriptors outside the bounds
 
 ```@docs

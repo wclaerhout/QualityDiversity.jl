@@ -56,7 +56,7 @@ end
     # in the plane: all cells are used, and the quantization error is far below
     # that of the k-means++ seeds
     samples = [rand(rng, SVector{2,Float64}) for _ in 1:20_000]
-    seeds = QD.kmeans_seeds(Xoshiro(3), samples, 100)
+    seeds = QD.kmeans_seeds(Xoshiro(3), QD.KMeansPlusPlus(), samples, 100)
     centers = QD.kmeans(Xoshiro(3), samples, 100)
     error(c) = let tree = QD.CentroidTree(c)
         sum(x -> sum(abs2, x - c[QD.nearest(tree, x)]), samples) / length(samples)
@@ -70,6 +70,36 @@ end
     @test QD.kmeans(Xoshiro(3), samples, 100) == centers
     @test QD.kmeans(Xoshiro(4), samples, 100) != centers
     @test QD.kmeans(Xoshiro(3), samples, 1) ≈ [sum(samples) / length(samples)]
+
+    # greedy k-means++ seeds are distinct samples, closer to the samples than k-means++ seeds;
+    # after Lloyd's iterations the two end close together for so few cells
+    greedy = QD.kmeans_seeds(Xoshiro(3), QD.GreedyKMeansPlusPlus(), samples, 100)
+    @test length(greedy) == 100 && allunique(greedy) && all(in(Set(samples)), greedy)
+    plain_errors = [error(QD.kmeans_seeds(Xoshiro(s), QD.KMeansPlusPlus(), samples, 100)) for s in 1:5]
+    greedy_errors = [error(QD.kmeans_seeds(Xoshiro(s), QD.GreedyKMeansPlusPlus(), samples, 100)) for s in 1:5]
+    @test sum(greedy_errors) < 0.9 * sum(plain_errors)
+    plain = [error(QD.kmeans(Xoshiro(s), samples, 100)) for s in 1:5]
+    greedy = [error(QD.kmeans(Xoshiro(s), samples, 100; seeding=QD.GreedyKMeansPlusPlus())) for s in 1:5]
+    @test sum(greedy) ≈ sum(plain) rtol = 0.02
+    @test QD.kmeans(Xoshiro(3), samples, 100; seeding=QD.KMeansPlusPlus()) == centers
+    @test QD.kmeans(Xoshiro(3), samples, 100; seeding=QD.GreedyKMeansPlusPlus()) ==
+          QD.kmeans(Xoshiro(3), samples, 100; seeding=QD.GreedyKMeansPlusPlus())
+    @test QD.kmeans(Xoshiro(3), samples, 1; seeding=QD.GreedyKMeansPlusPlus()) ≈ [sum(samples) / length(samples)]
+end
+
+@testset "CVTArchive seeding" begin
+    bounds = ((0, 1), (-1, 1))
+    plain = CVTArchive(40, bounds; samples=4_000, rng=Xoshiro(1))
+    @test QD.centroids(CVTArchive(40, bounds; samples=4_000, rng=Xoshiro(1), seeding=QD.KMeansPlusPlus())) ==
+          QD.centroids(plain)
+    greedy = CVTArchive(40, bounds; samples=4_000, rng=Xoshiro(1), seeding=QD.GreedyKMeansPlusPlus())
+    @test QD.capacity(greedy) == 40 && QD.centroids(greedy) != QD.centroids(plain)
+    @test all(c -> 0 <= c[1] <= 1 && -1 <= c[2] <= 1, QD.centroids(greedy))
+    prob = Rastrigin(4)
+    @test QD.centroids(CVTArchive(prob; cells=40, samples=4_000, rng=Xoshiro(1), seeding=QD.GreedyKMeansPlusPlus())) ==
+          QD.centroids(CVTArchive(40, QD.descriptor_bounds(prob); samples=4_000, rng=Xoshiro(1),
+                                  seeding=QD.GreedyKMeansPlusPlus()))
+    @test_throws TypeError CVTArchive(40, bounds; samples=4_000, seeding=:greedy)
 end
 
 @testset "CVTArchive construction" begin
