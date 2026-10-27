@@ -365,6 +365,11 @@ end
     prob = Rastrigin(4)
     host = CVTArchive(prob; cells=40, samples=4000, rng=Xoshiro(5))
     dev = DeviceCVTArchive(prob; cells=40, samples=4000, device=Array, rng=Xoshiro(5))
+    # the same seeding gives the same centroids as on the host
+    greedy = DeviceCVTArchive(prob; cells=40, samples=4000, device=Array, rng=Xoshiro(5),
+                              seeding=QD.GreedyKMeansPlusPlus())
+    @test QD.centroids(greedy) == QD.centroids(CVTArchive(prob; cells=40, samples=4000, rng=Xoshiro(5),
+                                                          seeding=QD.GreedyKMeansPlusPlus()))
     @test dev isa DeviceCVTArchive{Float64,Float64,2}
     @test dev isa QD.DeviceCellArchive
     @test QD.centroids(dev) == QD.centroids(host)
