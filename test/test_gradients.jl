@@ -56,6 +56,10 @@ end
     QD.evaluate(::Paraboloid, x) = Evaluation(-x[1]^2 - 3x[2]^2, SVector(x[1] * x[2], x[2]))
     _, jacobian = QD.evaluate_gradient(Paraboloid(), [1.0, 2.0])
     @test jacobian == [-2.0 -12.0; 2.0 1.0; 0.0 1.0]
+    # A descriptor that is not static.
+    struct TupleParaboloid <: QD.AbstractQDProblem end
+    QD.evaluate(::TupleParaboloid, x) = Evaluation(-x[1]^2 - 3x[2]^2, (x[1] * x[2], x[2]))
+    @test QD.evaluate_gradient(TupleParaboloid(), [1.0, 2.0])[2] == jacobian
 
     noisy = StochasticQDProblem((rng, x) -> (sum(x), (x[1], x[2])); init=rng -> rand(rng, 2), bounds=((0, 1), (0, 1)))
     @test_throws "StochasticQDProblem is a stochastic problem, which has no gradient" QD.evaluate_gradient(noisy, [0.5, 0.5])
@@ -143,6 +147,7 @@ end
     @test a.gradients[QD.cell_index(a, SVector(0.9, 0.9))] == J(6)
     @test first(QD.elites(a.inner)) == ([4.0, 4.0], ev(3.0, (0.12, 0.1)))
     @test length(a) == 2 && QD.max_fitness(a) == 7.0 && QD.qd_score(a) == 10.0 && coverage(a) == 2 / 16
+    @test QD.mean_fitness(a) == 5.0
     @test QD.result_archive(a) === a.inner
     @test length(QD.sample_elites(Xoshiro(1), a, 3)) == 3
     @test QD.descriptor_bounds(a) == QD.descriptor_bounds(a.inner)
@@ -155,6 +160,13 @@ end
     @test t.gradients[i] == J(1)
     @test QD.result_archive(t) === t.inner.result
     @test length(QD.result_archive(t)) == 1
+    # GradientOperatorEmitter steps from the elites of the threshold archive
+    child = only(QD.ask(Xoshiro(3), GradientOperatorEmitter(; sigma0=1.0, batch_size=1, normalize=false), t))
+    rng = Xoshiro(3)
+    rand(rng, t.inner.inner.occupied_idx)
+    c = [randn(rng) for _ in 1:3]
+    c[1] = abs(c[1])
+    @test child ≈ [1.0, 1.0] .+ J(1)' * c
 end
 
 @testset "GradientOperatorEmitter" begin

@@ -154,4 +154,10 @@ end
     es.eigenvalues .= 1
     es.mean[1] = NaN
     @test QD.should_stop(es, [3.0, 2.0])                          # broken down
+    # a covariance that is no longer finite has no eigendecomposition, and stops the search
+    QD.reset!(es, zeros(3))
+    es.cov[2, 2] = Inf
+    QD.update_eigensystem!(es)
+    @test all(isnan, es.eigenvalues)
+    @test QD.should_stop(es, [3.0, 2.0])
 end

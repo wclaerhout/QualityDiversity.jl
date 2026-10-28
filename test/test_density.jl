@@ -37,6 +37,7 @@ end
     @test QD.add!(a, [0.5], Evaluation(0.5, SVector(0.1))).status == QD.Rejected    # the grid keeps the better one
     @test QD.result_archive(a) === a.inner
     @test length(a) == 2
+    @test QD.qd_score(a; offset=1) == 5.0 && QD.max_fitness(a) == 2.0 && QD.mean_fitness(a) == 1.5
 
     @test_throws "descriptor component 1 is NaN, which is not finite" QD.add!(a, [0.0], Evaluation(1.0, SVector(NaN)))
     @test_throws "descriptor has 2 dimensions but the archive has 1" QD.density(a, SVector(0.0, 0.0))

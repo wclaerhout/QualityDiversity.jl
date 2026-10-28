@@ -30,6 +30,9 @@ end
     @test ev.fitness ≈ sum(s.fitness for s in single) / 6
     @test QD.evaluate(Xoshiro(1), SampledSpread(noisy; num_samples=6, expectation=QD.Median()), x).fitness ==
           QD.expectation(QD.Median(), [s.fitness for s in single])
+    # descriptors of another number type are kept as Float64
+    wide = QD.evaluate(Xoshiro(1), prob, big.(x))
+    @test wide.descriptor isa QD.DescriptorSamples{2} && collect(wide.descriptor) ≈ collect(ev.descriptor)
     @test QD.evaluations_per_solution(prob) == 6
     @test QD.descriptor_bounds(prob) == QD.descriptor_bounds(noisy)
     test_problem(prob)
@@ -125,6 +128,11 @@ end
     @test only(QD.elites(rejecting))[2].descriptor == SVector(0.1, 0.1)
     @test QD.spreads(rejecting)[1] ≈ QD.norm(SVector(1.9, 1.9))
     @test QD.add!(rejecting, [0.0], spread_eval(5.0, (NaN, 0.5), (0.9, 0.1))) == QD.AddResult(QD.Rejected, 0.0)
+    rs = QD.add_batch!(rejecting, [[1.0], [2.0], [3.0]],
+                       [spread_eval(1.0, (2.0, 2.0), (3.0, 3.0)), spread_eval(5.0, (NaN, 0.5), (0.9, 0.1)),
+                        spread_eval(2.0, (0.9, 0.9))])
+    @test rs == [QD.AddResult(QD.Rejected, -Inf), QD.AddResult(QD.Rejected, 0.0), QD.AddResult(QD.NewCell, 2.0)]
+    @test length(rejecting) == 2
     @test_throws "descriptor component 1 is 2.0, outside the archive bounds" QD.add!(grid(), [0.0], spread_eval(1.0, (2.0, 0.5)))
     @test_throws "descriptor has 3 dimensions but the archive has 2" QD.add!(grid(), [0.0], Evaluation(1.0, QD.DescriptorSamples([SVector(0.1, 0.1, 0.1)])))
     @test_throws "the evaluation has no descriptors" QD.add!(grid(), [0.0], Evaluation(1.0, QD.DescriptorSamples(SVector{2,Float64}[])))

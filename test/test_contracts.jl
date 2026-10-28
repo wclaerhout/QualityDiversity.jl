@@ -6,6 +6,12 @@
     labelled = Evaluation(1.5, (0.2, 0.7), :ring)
     @test labelled isa Evaluation{Float64,Tuple{Float64,Float64},Symbol}
     @test labelled.phenotype === :ring
+    # evaluations holding equal vectors are equal, and hash alike
+    a = Evaluation(1.0, [0.5, NaN], [1, 2])
+    b = Evaluation(1.0, [0.5, NaN], [1, 2])
+    @test isequal(a, b) && hash(a) == hash(b)
+    @test length(Set([a, b, Evaluation(1.0, [0.5, NaN], [1, 3])])) == 2
+    @test Evaluation(1.0, [0.5]) == Evaluation(1.0, [0.5]) != Evaluation(2.0, [0.5])
     r = QD.AddResult(QD.NewCell, 0.5)
     @test r.status == QD.NewCell
     @test r.improvement === 0.5

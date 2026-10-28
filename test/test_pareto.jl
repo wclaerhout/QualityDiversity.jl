@@ -99,6 +99,10 @@ end
     @test_throws "outside the archive bounds" QD.add!(a, [1.0], ev2(1, 1, (2.0, 0.5)))
     rejecting = pareto_archive(outside=RejectOutside())
     @test QD.add!(rejecting, [1.0], ev2(1, 1, (2.0, 0.5))) == QD.AddResult(QD.Rejected, -Inf)
+    rs = QD.add_batch!(rejecting, [[1.0], [2.0]], [ev2(1, 1, (2.0, 0.5)), ev2(1, 1, (0.5, 0.5))])
+    @test rs[1] == QD.AddResult(QD.Rejected, -Inf) && rs[2].status == QD.NewCell
+    @test length(rejecting) == 1
+    empty!(rejecting)
     # the objectives are checked also for a solution the archive discards
     @test_throws "every objective must be finite" QD.add!(rejecting, [1.0], ev2(NaN, 1, (2.0, 0.5)))
     @test_throws "every objective must be finite" QD.add_batch!(rejecting, [[1.0]], [ev2(NaN, 1, (2.0, 0.5))])

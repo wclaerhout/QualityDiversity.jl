@@ -11,6 +11,8 @@
     bad = QDProblem(x -> (0.0, (1.0, 2.0, 3.0)); init=rng -> [0.0], bounds=((0, 1), (0, 1)))
     @test_throws "descriptor has 3 dimensions but the problem bounds have 2" QD.evaluate(bad, [0.0])
     @test_throws "each bound must be a (lo, hi) pair" QDProblem(identity; init=identity, bounds=((1, 2, 3),))
+    named = QDProblem(x -> (0.0, (a=x[1], b=x[2])); init=rng -> rand(rng, 2), bounds=((0, 1), (0, 1)))
+    @test_throws "a descriptor must be a tuple or a vector of reals, got a @NamedTuple{a::Float64, b::Float64}" QD.evaluate(named, [0.5, 0.5])
 
     evs = QD.evaluate_batch(prob, [[1.0, 2.0], [0.0, 0.0]])
     @test [e.fitness for e in evs] == [-5.0, 0.0]
@@ -44,9 +46,12 @@ end
     cheap = QDProblem(x -> (-sum(abs2, x), (x[1], x[2])); init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
     @test QD.evaluate_batch(cheap, xs) == [QD.evaluate(cheap, x) for x in xs]
     # an error in the function comes out as it is, whichever thread raised it
-    failing = QDProblem(x -> (x[1] < 0.5 ? error("no good: " * string(x[1] > 0)) : 0.0, (x[1], x[2]));
+    # (the first two solutions pass, so the rest of the batch runs on threads)
+    failing = QDProblem(x -> (x[1] < 0.5 ? error("no good: " * string(x[1] > 0)) : sum(k -> sin(k * x[1]), 1:500),
+                              (x[1], x[2]));
                         init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
-    @test_throws ErrorException("no good: true") QD.evaluate_batch(failing, xs)
+    passing = filter(x -> x[1] >= 0.5, xs)
+    @test_throws ErrorException("no good: true") QD.evaluate_batch(failing, [passing[1:2]; xs])
     noisy = StochasticQDProblem((rng, x) -> (sum(k -> sin(k * x[1]), 1:500) + randn(rng), (x[1], x[2]));
                                 init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
     @test QD.evaluate_batch(Xoshiro(1), noisy, xs) == QD.evaluate_batch(Xoshiro(1), noisy, xs)

@@ -69,7 +69,7 @@ end
 
 @testset "add_batch! agrees with GridArchive" begin
     rng = Xoshiro(1)
-    for outside in (ThrowOutside(), ClampOutside(), RejectOutside()), F in (Float64, Float32, Int)
+    for outside in (ThrowOutside(), ClampOutside(), RejectOutside()), F in (Float64, Float32, Float16, Int, UInt32)
         host = GridArchive{Vector{Float64},F}((4, 3), ((0, 1), (0, 1)); outside)
         dev = DeviceGridArchive{Float64,F}(Array, (4, 3), ((0, 1), (0, 1)), 3; outside)
         reach = outside isa ThrowOutside ? (0.0, 1.0) : (-0.3, 1.3)
@@ -77,7 +77,7 @@ end
             n = rand(rng, 1:60)
             xs = [randn(rng, 3) for _ in 1:n]
             # few distinct fitness values, so that solutions tie for a cell
-            evs = [Evaluation(F(rand(rng, -3:3)), SVector(reach[1] + (reach[2] - reach[1]) * rand(rng),
+            evs = [Evaluation(F(rand(rng, F <: Unsigned ? (0:6) : (-3:3))), SVector(reach[1] + (reach[2] - reach[1]) * rand(rng),
                                                           reach[1] + (reach[2] - reach[1]) * rand(rng)))
                    for _ in 1:n]
             @test QD.add_batch!(dev, xs, evs) == QD.add_batch!(host, xs, evs)
@@ -176,6 +176,9 @@ end
     @test_throws "the evaluation has a phenotype of type String but the archive stores none" QD.add_batch!(dev, xs[1:1], [Evaluation(1.0, SVector(0.1, 0.2), "p")])
     @test_throws "descriptors must be 2 × 3, one column per solution, got 2 × 2" QD.EvaluationBatch{2}(zeros(3), zeros(2, 2))
     @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_add_batch!(nothing, nothing, nothing, nothing)
+    @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_evaluate!(nothing, nothing, nothing, nothing)
+    @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_vary!(nothing, nothing, nothing, nothing)
+    @test_throws "a BanditScheduler collects the batches of its emitters in a Vector and cannot run on a DeviceCellArchive" QD.ask(Xoshiro(1), BanditScheduler((VariationEmitter(GaussianMutation(0.1); batch_size=2),); num_active=1), dev)
 end
 
 @testset "conformance" begin
@@ -271,6 +274,8 @@ end
     @test_throws "the descriptor of QDProblem has 3 dimensions but its bounds have 2" QD.evaluate_batch(wrong, QD.DeviceBatch(rand(3, 2)))
     vector = QDProblem(x -> (-sum(abs2, x), x[1:2]); init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
     @test_throws "it must be a tuple or an SVector" QD.evaluate_batch(vector, QD.DeviceBatch(rand(3, 2)))
+    multi = QDProblem(x -> ([x[1], x[2]], (x[1], x[2])); init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
+    @test_throws "not an Evaluation with a real fitness; define QualityDiversity.evaluate_batch(prob::QDProblem, xs::DeviceBatch)" QD.evaluate_batch(multi, QD.DeviceBatch(rand(3, 2)))
     @test_throws "is a stochastic problem" QD.evaluate_batch(StochasticQDProblem((rng, x) -> (0.0, (0.0, 0.0)); init=rng -> rand(rng, 2), bounds=((0, 1), (0, 1))), QD.DeviceBatch(rand(2, 2)))
 end
 
@@ -402,6 +407,9 @@ end
         @test converted isa CVTArchive{Vector{Float64},F}
         @test elites_by_cell(h, converted) == elites_by_cell(h, h)
     end
+    strict = DeviceCVTArchive{Float64,Float64}(Array, 30, ((0, 1), (0, 2)), 3; samples=3000, rng=Xoshiro(7))
+    @test_throws "descriptor component 2 is 2.5, outside the archive bounds" QD.add_batch!(strict, [zeros(3)], [Evaluation(1.0, SVector(0.5, 2.5))])
+    @test length(strict) == 0
 
     # the kernels assign the cell of the host k-d tree, also at exact ties between centroids
     step = 1 / 10

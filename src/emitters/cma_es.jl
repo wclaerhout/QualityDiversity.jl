@@ -284,10 +284,11 @@ function update_eigensystem!(es::CMAES)
         es.cov[i, j] = es.cov[j, i] = symmetric_entry(es.variant, es.cov[i, j], es.cov[j, i])
     end
     # `eigen!` overwrites its argument, so it gets a copy in a buffer that is free until the
-    # decomposition is read.
+    # decomposition is read. A covariance that is not finite has no decomposition (`eigen!`
+    # throws for it), and marks the search as broken down.
     es.scaled_basis .= es.cov
-    decomposition = eigen!(Symmetric(es.scaled_basis))
-    if all(isfinite, decomposition.values) && all(isfinite, decomposition.vectors)
+    decomposition = all(isfinite, es.scaled_basis) ? eigen!(Symmetric(es.scaled_basis)) : nothing
+    if decomposition !== nothing && all(isfinite, decomposition.values) && all(isfinite, decomposition.vectors)
         for i in 1:n
             es.eigenvalues[i] = stored_eigenvalue(es.variant, decomposition.values[i])
         end
