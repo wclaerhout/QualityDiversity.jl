@@ -48,7 +48,8 @@ record_box!(boxes, mid, lows, highs) = (boxes[mid] = (lows, highs); nothing)
 # Rearranges `order[lo:hi]` so that no point before position `mid` has a larger coordinate
 # `axis` than the point at `mid`, and none after it a smaller one. Quickselect with a
 # median-of-three pivot and a three-way partition, so that many equal coordinates, as
-# repeated descriptors give, take linear time.
+# repeated descriptors give, take linear time. `partialsort!` cannot replace it: it puts
+# the element at `mid` in place but does not partition the others around it.
 function select_middle!(order, points, axis, lo, mid, hi)
     while lo < hi
         a = points[order[lo]][axis]
@@ -331,8 +332,8 @@ function bucket_members(tree::CentroidTree{N}, lower::SVector{N,Float64}, upper:
         lo = lower + (k .- 1) .* widths ./ SVector(dims) - margin
         hi = lower + k .* widths ./ SVector(dims) + margin
         center = (lo + hi) / 2
-        half_diagonal = sqrt(sum(abs2, hi - lo)) / 2
-        nearest_distance = sqrt(sum(abs2, tree.points[nearest(tree, center)] - center))
+        half_diagonal = norm(hi - lo) / 2
+        nearest_distance = norm(tree.points[nearest(tree, center)] - center)
         # every centroid that can be nearest to a point of the box is within this of its center
         empty!(candidates)
         within!(candidates, tree, center, (nearest_distance + 2half_diagonal)^2 * (1 + 1e-12))

@@ -22,7 +22,7 @@ end
     @test r.penalties == [0.0, 0.5, 1.0]
     @test r.per_penalty ≈ [1.0, 0.8, 0.6]
     @test r.score ≈ 2.4
-    @test r.num_targets == 1
+    @test r.n_targets == 1
 
     # a target at an elite: with a high penalty the elite there wins
     r = cqd_score(a; targets=[[0.4]], fitness_range=(0, 3), penalties=[5.0])
@@ -50,7 +50,7 @@ end
     @test issorted(r.per_penalty; rev=true)
     # with no penalty every target gets the best elite
     @test r.per_penalty[1] ≈ maximum(fitness) / 6
-    @test r.score ≈ r.num_targets * sum(r.per_penalty)
+    @test r.score ≈ r.n_targets * sum(r.per_penalty)
     # the order of the targets and of the elites does not matter
     @test cqd_score(a; targets=reverse(targets), fitness_range=(-3, 3), penalties=7, distance_max=2sqrt(2)).score ≈ r.score
     b = all_elites(reverse(fitness), reverse(descriptors))
@@ -76,20 +76,20 @@ end
     a = GridArchive((10, 10), ((0, 1), (-2, 2)))
     QD.add!(a, [0.0], Evaluation(1.0, SVector(0.5, 0.0)))
     QD.add!(a, [0.0], Evaluation(0.2, SVector(0.9, 1.5)))
-    r = cqd_score(Xoshiro(3), a; num_targets=50, fitness_range=(0, 1))
-    @test r.num_targets == 50
+    r = cqd_score(Xoshiro(3), a; n_targets=50, fitness_range=(0, 1))
+    @test r.n_targets == 50
     # the targets are drawn uniformly within the bounds, with the generator given
     rng = Xoshiro(3)
     targets = [SVector(0.0, -2.0) .+ rand(rng, SVector{2,Float64}) .* SVector(1.0, 4.0) for _ in 1:50]
     @test cqd_score(a; targets, fitness_range=(0, 1)).score == r.score
-    @test cqd_score(Xoshiro(3), a; num_targets=50, fitness_range=(0, 1)).score == r.score
-    @test cqd_score(Xoshiro(4), a; num_targets=50, fitness_range=(0, 1)).score != r.score
+    @test cqd_score(Xoshiro(3), a; n_targets=50, fitness_range=(0, 1)).score == r.score
+    @test cqd_score(Xoshiro(4), a; n_targets=50, fitness_range=(0, 1)).score != r.score
     # other bounds
-    s = cqd_score(Xoshiro(3), a; num_targets=50, fitness_range=(0, 1), bounds=((0.5, 0.5), (0, 0)))
+    s = cqd_score(Xoshiro(3), a; n_targets=50, fitness_range=(0, 1), bounds=((0.5, 0.5), (0, 0)))
     @test s.per_penalty[end] ≈ 1.0                       # every target is at the best elite
     u = UnstructuredArchive(1; capacity=4, novelty_threshold=0.0)
     QD.add!(u, [0.0], Evaluation(1.0, SVector(0.3)))
-    @test cqd_score(Xoshiro(1), u; num_targets=3, fitness_range=(0, 1), distance_max=1, bounds=((0, 1),)).num_targets == 3
+    @test cqd_score(Xoshiro(1), u; n_targets=3, fitness_range=(0, 1), distance_max=1, bounds=((0, 1),)).n_targets == 3
 end
 
 @testset "cqd_score errors" begin
@@ -105,14 +105,14 @@ end
     @test_throws "penalties must hold at least one weight" cqd_score(a; targets=[[0.5]], fitness_range=(0, 1), penalties=Float64[])
     @test_throws "penalties must be finite" cqd_score(a; targets=[[0.5]], fitness_range=(0, 1), penalties=[Inf])
     @test_throws "distance_max must be finite and greater than 0, got 0" cqd_score(a; targets=[[0.5]], fitness_range=(0, 1), distance_max=0)
-    @test_throws "num_targets must be at least 1, got 0" cqd_score(Xoshiro(1), a; num_targets=0, fitness_range=(0, 1))
-    @test_throws "bounds has 2 entries but the archive has 1" cqd_score(Xoshiro(1), a; num_targets=2, fitness_range=(0, 1), bounds=((0, 1), (0, 1)))
-    @test_throws "bounds must be finite (lo, hi) pairs with lo <= hi" cqd_score(Xoshiro(1), a; num_targets=2, fitness_range=(0, 1), bounds=((1, 0),))
+    @test_throws "n_targets must be at least 1, got 0" cqd_score(Xoshiro(1), a; n_targets=0, fitness_range=(0, 1))
+    @test_throws "bounds has 2 entries but the archive has 1" cqd_score(Xoshiro(1), a; n_targets=2, fitness_range=(0, 1), bounds=((0, 1), (0, 1)))
+    @test_throws "bounds must be finite (lo, hi) pairs with lo <= hi" cqd_score(Xoshiro(1), a; n_targets=2, fitness_range=(0, 1), bounds=((1, 0),))
 
     u = UnstructuredArchive(1; capacity=4, novelty_threshold=0.0)
     QD.add!(u, [0.0], Evaluation(1.0, SVector(0.3)))
     @test_throws "UnstructuredArchive does not report the bounds of its descriptor space; pass distance_max" cqd_score(u; targets=[[0.0]], fitness_range=(0, 1))
-    @test_throws "pass bounds" cqd_score(Xoshiro(1), u; num_targets=3, fitness_range=(0, 1), distance_max=1)
+    @test_throws "pass bounds" cqd_score(Xoshiro(1), u; n_targets=3, fitness_range=(0, 1), distance_max=1)
     c = CategoricalArchive((1:3,))
     @test_throws "cqd_score measures distances between descriptors, which the descriptors of a CategoricalArchive do not have" cqd_score(c; targets=[[1]], fitness_range=(0, 1))
     bi = BiSphere(2)

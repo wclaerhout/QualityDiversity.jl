@@ -83,7 +83,9 @@ end
 # which is known from its type; a tuple the types of its entries.
 descriptor_type(descriptor::AbstractVector) = promote_type(Float64, eltype(descriptor))
 descriptor_type(descriptor::Tuple) = promote_type(Float64, map(typeof, descriptor)...)
-descriptor_type(descriptor) = promote_type(Float64, map(typeof, Tuple(descriptor))...)
+function descriptor_type(descriptor)
+    throw(ArgumentError("a descriptor must be a tuple or a vector of reals, got a $(typeof(descriptor))"))
+end
 
 function make_evaluation(space::DescriptorCategories, fitness, descriptor, phenotype=nothing)
     N = length(space.values)

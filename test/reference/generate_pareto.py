@@ -1,6 +1,6 @@
 # Reference values for test_pareto.jl: hypervolumes from pymoo (HV indicator), and the
 # solutions that QDax's MOMERepertoire keeps in one cell after a sequence of insertions.
-# `python3 generate_pareto.py` rewrites `pareto.jl` next to it. Needs pymoo and qdax.
+# `python3 generate_pareto.py` rewrites `pareto.jl` next to it. Needs pymoo 0.6.2 and qdax 0.5.0.
 import warnings
 import numpy as np
 import jax.numpy as jnp

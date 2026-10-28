@@ -122,7 +122,7 @@ julia> using QualityDiversity, QualityDiversity.Benchmarks, Random
 
 julia> prob = Rastrigin(10);
 
-julia> alg = CMAME(prob; dims=(20, 20), sigma0=1.0, num_emitters=3);
+julia> alg = CMAME(prob; dims=(20, 20), sigma0=1.0, n_emitters=3);
 
 julia> result = solve(prob, alg; budget=3_000, rng=Xoshiro(1));
 

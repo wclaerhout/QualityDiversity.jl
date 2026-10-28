@@ -135,7 +135,7 @@ function check_spread_pairing(::SampledSpread, archive::AbstractArchive)
 end
 
 function check_spread_pairing(prob::AbstractStochasticQDProblem, ::SpreadArchive)
-    throw(ArgumentError("a SpreadArchive needs every evaluation of a solution: wrap the problem as SampledSpread(prob; num_samples)"))
+    throw(ArgumentError("a SpreadArchive needs every evaluation of a solution: wrap the problem as SampledSpread(prob; n_samples)"))
 end
 
 function check_spread_pairing(prob::AbstractQDProblem, ::SpreadArchive)

@@ -22,32 +22,32 @@ mutation(n) = VariationEmitter(GaussianMutation(0.1); batch_size=n)
 
 @testset "BanditScheduler construction" begin
     pool = (mutation(2), mutation(3), CMAEmitter(4; sigma0=0.5, batch_size=5))
-    s = BanditScheduler(pool; num_active=2)
+    s = BanditScheduler(pool; n_active=2)
     @test s isa QD.AbstractEmitter
     @test QD.active(s) == [true, true, false]
     @test QD.active(s) !== s.active
     @test QD.batch_size(s) == 5
-    @test BanditScheduler(collect(pool); num_active=1).pool isa Tuple
+    @test BanditScheduler(collect(pool); n_active=1).pool isa Tuple
     @test QD.restarts(mutation(2)) === nothing
     @test QD.restarts(pool[3]) == 0
 
     c = CMAEmitter(4; sigma0=0.5)
-    @test_throws "pool[1] and pool[3] are the same CMAEmitter" BanditScheduler((c, mutation(2), c); num_active=1)
+    @test_throws "pool[1] and pool[3] are the same CMAEmitter" BanditScheduler((c, mutation(2), c); n_active=1)
     m = mutation(2)
-    @test BanditScheduler((m, m); num_active=1) isa BanditScheduler     # an emitter without state may repeat
-    @test_throws "the pool must hold at least one emitter" BanditScheduler((); num_active=1)
-    @test_throws "pool[2] is a Int64, not an AbstractEmitter" BanditScheduler((m, 1); num_active=1)
-    @test_throws "num_active must be between 1 and the size of the pool (3), got 4" BanditScheduler(pool; num_active=4)
-    @test_throws "num_active must be between 1 and the size of the pool (3), got 0" BanditScheduler(pool; num_active=0)
-    @test_throws "zeta must be finite and at least 0, got -1" BanditScheduler(pool; num_active=1, zeta=-1)
-    @test_throws "zeta must be finite and at least 0, got Inf" BanditScheduler(pool; num_active=1, zeta=Inf)
-    @test_throws "window must be at least 1, got 0" BanditScheduler(pool; num_active=1, window=0)
+    @test BanditScheduler((m, m); n_active=1) isa BanditScheduler     # an emitter without state may repeat
+    @test_throws "the pool must hold at least one emitter" BanditScheduler((); n_active=1)
+    @test_throws "pool[2] is a Int64, not an AbstractEmitter" BanditScheduler((m, 1); n_active=1)
+    @test_throws "n_active must be between 1 and the size of the pool (3), got 4" BanditScheduler(pool; n_active=4)
+    @test_throws "n_active must be between 1 and the size of the pool (3), got 0" BanditScheduler(pool; n_active=0)
+    @test_throws "zeta must be finite and at least 0, got -1" BanditScheduler(pool; n_active=1, zeta=-1)
+    @test_throws "zeta must be finite and at least 0, got Inf" BanditScheduler(pool; n_active=1, zeta=Inf)
+    @test_throws "window must be at least 1, got 0" BanditScheduler(pool; n_active=1, window=0)
 end
 
 @testset "BanditScheduler UCB1 choice" begin
     archive = bandit_archive()
     N, R = QD.NewCell, QD.Rejected
-    s = BanditScheduler((mutation(2), mutation(2), mutation(2)); num_active=1, window=10)
+    s = BanditScheduler((mutation(2), mutation(2), mutation(2)); n_active=1, window=10)
     ucb(succ, sel, total) = succ / sel + 0.05 * sqrt(log(total) / sel)
 
     bandit_round!(s, archive, [N, R])
@@ -65,7 +65,7 @@ end
     @test s.rounds == 4
 
     # zeta weighs the bonus of rarely chosen emitters
-    greedy = BanditScheduler((mutation(2), mutation(2)); num_active=1, zeta=0)
+    greedy = BanditScheduler((mutation(2), mutation(2)); n_active=1, zeta=0)
     bandit_round!(greedy, archive, [R, R])
     bandit_round!(greedy, archive, [N, R])
     bandit_round!(greedy, archive, [R, R])
@@ -75,7 +75,7 @@ end
     # The bonus takes the log of the total selections, as Algorithm 1 of the paper does.
     # Here that choice decides: with the log of the total successes, as pyribs takes it,
     # the first emitter would win.
-    explorer = BanditScheduler((mutation(8), mutation(2)); num_active=1, zeta=1.5)
+    explorer = BanditScheduler((mutation(8), mutation(2)); n_active=1, zeta=1.5)
     bandit_round!(explorer, archive, [N, N, N, N, N, N, R, R])
     bandit_round!(explorer, archive, [R, R])
     @test explorer.selections == [8, 2] && explorer.successes == [6, 0]
@@ -90,7 +90,7 @@ end
     N, R = QD.NewCell, QD.Rejected
     # with a window of one round, only the emitter that just ran has selections, so the
     # others score Inf, and the first two take turns
-    s = BanditScheduler((mutation(2), mutation(2), mutation(2)); num_active=1, window=1)
+    s = BanditScheduler((mutation(2), mutation(2), mutation(2)); n_active=1, window=1)
     order = Int[]
     for _ in 1:6
         push!(order, findfirst(QD.active(s)))
@@ -100,7 +100,7 @@ end
     @test s.selections == [0, 2, 0]
 
     # rounds older than the window leave the counts
-    w = BanditScheduler((mutation(2), mutation(3)); num_active=2, window=3)
+    w = BanditScheduler((mutation(2), mutation(3)); n_active=2, window=3)
     for statuses in ([N, N, R, R, R], [N, R, R, R, R], [R, R, N, N, N], [R, R, R, R, R])
         bandit_round!(w, archive, statuses)
     end
@@ -115,7 +115,7 @@ end
     pool = (cma(), mutation(4), cma())
 
     # a CMA emitter stays until it restarts; an emitter that cannot restart leaves every round
-    s = BanditScheduler(pool; num_active=2)
+    s = BanditScheduler(pool; n_active=2)
     @test QD.active(s) == [true, true, false]
     bandit_round!(s, archive, [N, R, R, R, N, N, N, N])
     @test QD.active(s) == [true, false, true]              # the mutation left; the untried one scores Inf
@@ -129,7 +129,7 @@ end
     @test QD.active(s) == [false, true, true]
 
     # ReselectAll chooses every slot again after every round
-    a = BanditScheduler((mutation(2), mutation(2), mutation(2)); num_active=2, reselect=QD.ReselectAll())
+    a = BanditScheduler((mutation(2), mutation(2), mutation(2)); n_active=2, reselect=QD.ReselectAll())
     bandit_round!(a, archive, [N, N, R, R])
     @test QD.active(a) == [true, false, true]
 end
@@ -137,7 +137,7 @@ end
 @testset "BanditScheduler batches" begin
     archive = bandit_archive()
     pool = (mutation(3), CMAEmitter(4; sigma0=0.5, batch_size=5), mutation(7))
-    s = BanditScheduler(pool; num_active=2, reselect=QD.ReselectAll())
+    s = BanditScheduler(pool; n_active=2, reselect=QD.ReselectAll())
     xs = QD.ask(Xoshiro(3), s, archive)
     @test length(xs) == 8 == QD.batch_size(s)
     @test xs isa Vector{Vector{Float64}}
@@ -158,7 +158,7 @@ end
     pool = (VariationEmitter(GaussianMutation(0.1); batch_size=20),
             VariationEmitter(IsoLineVariation(0.01, 0.1); batch_size=20),
             (CMAEmitter(6; sigma0=0.5, batch_size=10) for _ in 1:3)...)
-    alg = QDAlgorithm(GridArchive(prob; dims=(10, 10)), (BanditScheduler(pool; num_active=2),))
+    alg = QDAlgorithm(GridArchive(prob; dims=(10, 10)), (BanditScheduler(pool; n_active=2),))
     result = solve(prob, alg; budget=5_000, rng=Xoshiro(1))
     @test coverage(result.archive) > 0.5
     again = solve(prob, alg; budget=5_000, rng=Xoshiro(1))
@@ -189,7 +189,7 @@ end
     archive = GridArchive((2,), ((0, 1),))
     for case in bandit_cases
         pool = Tuple(ScriptedEmitter(n, r == 1, 0, false) for (n, r) in zip(case.sizes, case.restarting))
-        s = BanditScheduler(pool; num_active=case.num_active, reselect=case.reselect, window=10^6)
+        s = BanditScheduler(pool; n_active=case.num_active, reselect=case.reselect, window=10^6)
         for t in eachindex(case.actives)
             ours = findall(QD.active(s))
             expected = case.actives[t]

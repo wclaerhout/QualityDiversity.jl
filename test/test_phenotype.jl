@@ -25,8 +25,8 @@ plain = QDProblem(x -> (-sum(abs2, x), (clamp(x[1], -1, 1), clamp(x[2], -1, 1)))
                                 init=rng -> 2 .* rand(rng, 3) .- 1, bounds=((-1, 1), (-1, 1)))
     @test QD.evaluate(Xoshiro(1), noisy, [0.1, 0.2, 0.3]).phenotype == "0.6"
     test_problem(noisy)
-    @test QD.evaluate(Xoshiro(1), Sampled(noisy; num_samples=4), [0.1, 0.2, 0.3]).phenotype == "0.6"
-    test_problem(Sampled(noisy; num_samples=3))
+    @test QD.evaluate(Xoshiro(1), Sampled(noisy; n_samples=4), [0.1, 0.2, 0.3]).phenotype == "0.6"
+    test_problem(Sampled(noisy; n_samples=3))
 end
 
 @testset "Sampled keeps the most frequent phenotype" begin
@@ -42,12 +42,12 @@ end
     for seed in 1:20
         rng = Xoshiro(seed)
         draws = [QD.evaluate(rng, drawn, x).phenotype for _ in 1:7]
-        ev = QD.evaluate(Xoshiro(seed), Sampled(drawn; num_samples=7), x)
+        ev = QD.evaluate(Xoshiro(seed), Sampled(drawn; n_samples=7), x)
         @test ev.phenotype == QD.most_frequent(draws)
         @test count(==(ev.phenotype), draws) == maximum(p -> count(==(p), draws), draws)
     end
-    @test QD.evaluate(Xoshiro(1), Sampled(drawn; num_samples=1), x).phenotype == QD.evaluate(Xoshiro(1), drawn, x).phenotype
-    test_problem(Sampled(drawn; num_samples=5))
+    @test QD.evaluate(Xoshiro(1), Sampled(drawn; n_samples=1), x).phenotype == QD.evaluate(Xoshiro(1), drawn, x).phenotype
+    test_problem(Sampled(drawn; n_samples=5))
 
     # without isequal of its own, a mutable phenotype compares by identity and the first is kept
     mutable struct Box
@@ -55,10 +55,10 @@ end
     end
     boxed = StochasticQDProblem((rng, x) -> (0.0, (0.0, 0.0), Box(rand(rng, 1:2))); init=rng -> [0.0],
                                 bounds=((-1, 1), (-1, 1)))
-    @test QD.evaluate(Xoshiro(3), Sampled(boxed; num_samples=6), [0.0]).phenotype.value ==
+    @test QD.evaluate(Xoshiro(3), Sampled(boxed; n_samples=6), [0.0]).phenotype.value ==
           QD.evaluate(Xoshiro(3), boxed, [0.0]).phenotype.value
 
-    result = solve(drawn, MAPElites(Sampled(drawn; num_samples=3); dims=(4, 4), phenotype=Int); budget=600, rng=Xoshiro(1))
+    result = solve(drawn, MAPElites(Sampled(drawn; n_samples=3); dims=(4, 4), phenotype=Int); budget=600, rng=Xoshiro(1))
     @test all(((_, ev),) -> ev.phenotype in 1:3, QD.elites(result.archive))
 
     @test_throws "the function of the problem must return a (fitness, descriptor) or (fitness, descriptor, phenotype) tuple, got a Vector{Float64}" QD.evaluate(QDProblem(x -> [1.0, 0.5]; init=rng -> 0.0, bounds=((0, 1),)), 0.0)
@@ -130,7 +130,7 @@ end
     @test_throws "the evaluation has no phenotype" QD.add!(pareto(Symbol), x, ev)
     a = pareto(Symbol)
     @test_throws "the evaluation has no phenotype" QD.add_batch!(a, [x, x], [Evaluation(ev.fitness, ev.descriptor, :a), ev])
-    @test QD.num_solutions(a) == 0
+    @test QD.n_solutions(a) == 0
 
     # a phenotype converts to the type of the archive, and a Union with Nothing takes none
     a = GridArchive(plain; dims=(4, 4), phenotype=Float64)

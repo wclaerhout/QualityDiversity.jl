@@ -26,24 +26,15 @@ julia> hypervolume([[1.0, 1.0, 1.0], [2.0, 2.0, 0.5]], [0.0, 0.0, 0.0])
 function hypervolume(points, reference_point::AbstractVector{<:Real})
     m = length(reference_point)
     m >= 1 || throw(ArgumentError("the reference point needs at least one objective"))
-    ref = float_vector(reference_point)
+    ref = copyto!(Vector{Float64}(undef, m), reference_point)
     pts = Vector{Float64}[]
     for p in points
         length(p) == m ||
             throw(ArgumentError("a point has $(length(p)) objectives but the reference point has $m"))
         any(isnan, p) && throw(ArgumentError("a point has a NaN objective"))
-        all(j -> p[j] > ref[j], 1:m) && push!(pts, float_vector(p))
+        all(j -> p[j] > ref[j], 1:m) && push!(pts, copyto!(Vector{Float64}(undef, m), p))
     end
     return slice_volume(pts, ref, m)
-end
-
-# A `Vector{Float64}` with the entries of `v`, whatever the vector type.
-function float_vector(v)
-    out = Vector{Float64}(undef, length(v))
-    for (j, x) in enumerate(v)
-        out[j] = x
-    end
-    return out
 end
 
 # Volume above `ref` of the points in `pts` (all above `ref`) in the first `d` objectives.

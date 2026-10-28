@@ -6,6 +6,12 @@
     labelled = Evaluation(1.5, (0.2, 0.7), :ring)
     @test labelled isa Evaluation{Float64,Tuple{Float64,Float64},Symbol}
     @test labelled.phenotype === :ring
+    # evaluations holding equal vectors are equal, and hash alike
+    a = Evaluation(1.0, [0.5, NaN], [1, 2])
+    b = Evaluation(1.0, [0.5, NaN], [1, 2])
+    @test isequal(a, b) && hash(a) == hash(b)
+    @test length(Set([a, b, Evaluation(1.0, [0.5, NaN], [1, 3])])) == 2
+    @test Evaluation(1.0, [0.5]) == Evaluation(1.0, [0.5]) != Evaluation(2.0, [0.5])
     r = QD.AddResult(QD.NewCell, 0.5)
     @test r.status == QD.NewCell
     @test r.improvement === 0.5
@@ -67,7 +73,7 @@ const PUBLIC_ONLY = (:AddStatus, :AddResult, :QDState, :QDResult, :Average, :Med
                      :ImprovementRanker, :TwoStageImprovementRanker, :TwoStageObjectiveRanker, :DirectionRanker,
                      :RandomDirectionRanker, :TwoStageRandomDirectionRanker, :AcceptedRandomDirectionRanker,
                      :FilterSelection, :MuSelection, :ReselectTerminated, :ReselectAll, :NoImprovementRestart,
-                     :ConvergenceRestart, :PeriodicRestart, :CQDScore, :num_solutions, :max_hypervolume, :max_scores,
+                     :ConvergenceRestart, :PeriodicRestart, :CQDScore, :n_solutions, :max_hypervolume, :max_scores,
                      :Expectation, :SelectionRule, :RestartRule, :GradientOptimizer, :ReselectRule, :Benchmarks)
 
 @testset "the export list is deliberate" begin
@@ -133,7 +139,7 @@ end
     labels = QDProblem(x -> (0.0, (1, :a)); init=rng -> rand(rng, 2), categories=(1:2, [:a]))
     noisy = StochasticQDProblem((rng, x) -> (-sum(abs2, x), (x[1], x[2]) .+ 0.05 .* randn(rng, 2));
                                 init=rng -> randn(rng, 3), bounds=((-3, 3), (-3, 3)))
-    spread = SampledSpread(noisy; num_samples=2)
+    spread = SampledSpread(noisy; n_samples=2)
     grid_algorithms = (p -> MAPElites(p; dims=(2, 2)), p -> CMAME(p; dims=(2, 2), sigma0=0.5),
                        p -> CMAMAE(p; dims=(2, 2), sigma0=0.5, threshold_min=-100),
                        p -> DDS(p; dims=(2, 2), sigma0=0.5, bandwidth=0.5),

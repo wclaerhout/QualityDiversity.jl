@@ -38,7 +38,7 @@ runs = timed_runs(seed -> solve(prob, make_algorithm(); budget=BUDGET, rng=Xoshi
                   result -> (a = result.archive;
                              (coverage=coverage(a), qd_score=qd_score(a), global_hypervolume=global_hypervolume(a),
                               max_hypervolume=QualityDiversity.max_hypervolume(a),
-                              solutions=QualityDiversity.num_solutions(a))),
+                              solutions=QualityDiversity.n_solutions(a))),
                   REPEATS)
 s = summary(runs)
 println("| ", round(s.min; digits=3),

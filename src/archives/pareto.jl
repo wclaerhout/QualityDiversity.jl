@@ -103,7 +103,7 @@ QualityDiversity.add_batch!) are those of each solution against the archive as i
 before the batch, and the solutions are then added in order.
 
 `length(archive)` is the number of occupied cells, as for the other archives, and
-[`num_solutions`](@ref) the number of solutions. [`elites`](@ref QualityDiversity.elites)
+[`n_solutions`](@ref) the number of solutions. [`elites`](@ref QualityDiversity.elites)
 iterates over all of them. [`sample_elites`](@ref QualityDiversity.sample_elites) draws an
 occupied cell uniformly and then a solution of its front uniformly.
 
@@ -132,7 +132,7 @@ NewCell::AddStatus = 2
 julia> QualityDiversity.add!(archive, [0.2], Evaluation(SVector(3.0, 1.0), SVector(0.2, 0.2))).improvement
 2.0
 
-julia> length(archive), QualityDiversity.num_solutions(archive), qd_score(archive)
+julia> length(archive), QualityDiversity.n_solutions(archive), qd_score(archive)
 (1, 2, 5.0)
 ```
 """
@@ -162,7 +162,7 @@ mutable struct ParetoGridArchive{G,M,N,O<:OutsidePolicy,P,U<:DuplicatePolicy,R<:
     volume_sum_error::Float64
     # Largest entry of `volumes` over the occupied cells.
     max_volume::Float64
-    num_solutions::Int
+    n_solutions::Int
     # Workspace for the hypervolume and the crowding distances of one front; `slices[d-1]`
     # holds the points of a slab in the first `d` objectives.
     const scratch::Vector{SVector{M,Float64}}
@@ -224,12 +224,12 @@ Base.length(archive::ParetoGridArchive) = length(archive.occupied_idx)
 capacity(archive::ParetoGridArchive) = length(archive.counts)
 
 """
-    num_solutions(archive)
+    n_solutions(archive)
 
 Number of solutions in `archive`. For a [`ParetoGridArchive`](@ref), which keeps a front in
 every cell, it is larger than `length(archive)`, the number of occupied cells.
 """
-num_solutions(archive::ParetoGridArchive) = archive.num_solutions
+n_solutions(archive::ParetoGridArchive) = archive.n_solutions
 
 descriptor_bounds(archive::ParetoGridArchive) = Tuple(zip(archive.lower, archive.upper))
 
@@ -437,7 +437,7 @@ function insert_front!(archive::ParetoGridArchive, i, x, f, descriptor, phenotyp
     n == 0 && push!(archive.occupied_idx, i)
     archive.counts[i] = kept + 1
     archive.versions[i] += 1
-    archive.num_solutions += kept + 1 - n
+    archive.n_solutions += kept + 1 - n
     previous = archive.volumes[i]
     archive.volumes[i] = volume
     if volume >= archive.max_volume
@@ -556,7 +556,7 @@ function Base.empty!(archive::ParetoGridArchive)
     archive.volume_sum = 0.0
     archive.volume_sum_error = 0.0
     archive.max_volume = 0.0
-    archive.num_solutions = 0
+    archive.n_solutions = 0
     return archive
 end
 
@@ -581,7 +581,7 @@ end
     global_hypervolume(archive::ParetoGridArchive)
 
 Hypervolume of the Pareto front of all the solutions of the archive, from every cell,
-computed with [`hypervolume`](@ref): for `n` solutions, [`num_solutions`](@ref), and `M`
+computed with [`hypervolume`](@ref): for `n` solutions, [`n_solutions`](@ref), and `M`
 objectives it takes time of the order of `n log n` for two objectives and `n^(M-1) log n`
 for more. Zero for an empty archive.
 """
@@ -612,12 +612,12 @@ function max_scores(archive::ParetoGridArchive{G,M}) where {G,M}
 end
 
 const ParetoMetricsRecord = @NamedTuple{n_evals::Int, qd_score::Float64, coverage::Float64,
-                                        max_hypervolume::Float64, num_solutions::Int}
+                                        max_hypervolume::Float64, n_solutions::Int}
 
 metrics_record_type(::Type{<:ParetoGridArchive}) = ParetoMetricsRecord
 
 function metrics_record(archive::ParetoGridArchive, n_evals, offset)
     return (n_evals=n_evals, qd_score=qd_score(archive), coverage=Float64(coverage(archive)),
             max_hypervolume=length(archive) == 0 ? 0.0 : max_hypervolume(archive),
-            num_solutions=num_solutions(archive))
+            n_solutions=n_solutions(archive))
 end

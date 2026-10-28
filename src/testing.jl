@@ -418,7 +418,7 @@ fitness type of the archive must be a vector of reals.
 The result of `add!` must be `NewCell` for an empty cell, `Rejected` with zero `improvement`
 for a solution that a stored one matches in every objective, and `Improved` with a positive
 `improvement` for a solution that beats the front. Every cell must hold a front of solutions
-none of which beats another, `length` counts the occupied cells and `num_solutions` the
+none of which beats another, `length` counts the occupied cells and `n_solutions` the
 solutions that `elites` yields. `add_batch!` must give each solution the result that it has
 alone against the archive as it was before the batch, and leave the archive as adding the
 solutions one at a time does. An objective that is `NaN` or infinite must throw an
@@ -442,7 +442,7 @@ function test_front_archive(make_archive, prob::QD.AbstractQDProblem; rng::Abstr
         end
 
         @testset "empty archive" begin
-            @test length(archive) == 0 && QD.num_solutions(archive) == 0
+            @test length(archive) == 0 && QD.n_solutions(archive) == 0
             @test isempty(collect(QD.elites(archive)))
             @test QD.qd_score(archive) == 0
             @test QD.coverage(archive) == 0
@@ -467,7 +467,7 @@ function test_front_archive(make_archive, prob::QD.AbstractQDProblem; rng::Abstr
             ev = evs[1]
             r = @inferred QD.add!(a, xs[1], ev)
             @test r.status == QD.NewCell && r.improvement > 0
-            @test length(a) == 1 && QD.num_solutions(a) == 1
+            @test length(a) == 1 && QD.n_solutions(a) == 1
 
             # a copy adds no hypervolume, whether or not the archive keeps it
             copy = QD.add!(a, xs[1], ev)
@@ -475,13 +475,13 @@ function test_front_archive(make_archive, prob::QD.AbstractQDProblem; rng::Abstr
             worse = QD.Evaluation(_shift_fitness(ev.fitness, -1), ev.descriptor, ev.phenotype)
             r = QD.add!(a, xs[2], worse)
             @test r.status == QD.Rejected && r.improvement == 0
-            @test QD.num_solutions(a) == (copy.status == QD.Rejected ? 1 : 2)
+            @test QD.n_solutions(a) == (copy.status == QD.Rejected ? 1 : 2)
 
             better = QD.Evaluation(_shift_fitness(ev.fitness, 1), ev.descriptor, ev.phenotype)
             r = QD.add!(a, xs[3], better)
             @test r.status == QD.Improved && r.improvement > 0
             # the new solution beats the old one in every objective and replaces it
-            @test QD.num_solutions(a) == 1
+            @test QD.n_solutions(a) == 1
             @test only(collect(QD.elites(a)))[1] == convert(G, xs[3])
 
             if check_allocations && isbitstype(G)
@@ -495,7 +495,7 @@ function test_front_archive(make_archive, prob::QD.AbstractQDProblem; rng::Abstr
                 QD.add!(a, x, ev)
             end
             stored = collect(QD.elites(a))
-            @test length(stored) == QD.num_solutions(a)
+            @test length(stored) == QD.n_solutions(a)
             cells = Dict{Int,Vector{F}}()
             for (_, ev) in stored
                 push!(get!(cells, QD.cell_index(a, ev.descriptor), F[]), ev.fitness)
@@ -556,7 +556,7 @@ function test_front_archive(make_archive, prob::QD.AbstractQDProblem; rng::Abstr
             a = make_archive()
             QD.add_batch!(a, xs, evs)
             empty!(a)
-            @test length(a) == 0 && QD.num_solutions(a) == 0 && QD.qd_score(a) == 0
+            @test length(a) == 0 && QD.n_solutions(a) == 0 && QD.qd_score(a) == 0
             @test isempty(collect(QD.elites(a)))
             @test QD.add!(a, xs[1], evs[1]).status == QD.NewCell
         end

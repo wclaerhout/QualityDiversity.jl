@@ -1,14 +1,14 @@
 """
-    DeviceCMAEmitter(dim; num_emitters, sigma0, kwargs...)
+    DeviceCMAEmitter(dim; n_emitters, sigma0, kwargs...)
 
-The emitter of CMA-ME over a [`DeviceCellArchive`](@ref): `num_emitters` independent CMA-ES
+The emitter of CMA-ME over a [`DeviceCellArchive`](@ref): `n_emitters` independent CMA-ES
 searches, each a [`CMAEmitter`](@ref) with the keyword arguments of `CMAEmitter`, that ask
 together. Their candidates form one batch, which is evaluated and added to the archive on
 the device at once, so every search of a round sees the archive as it was before the
 round, as in pyribs. A host [`CMAME`](@ref) instead steps its emitters one after another,
 as in the CMA-ME paper. The searches that restart draw their new starts from the archive
 together, at the start of the round. A device only pays off with many searches, or many
-candidates per search: the batch has `num_emitters` times the batch size of one search.
+candidates per search: the batch has `n_emitters` times the batch size of one search.
 
 The searches stay on the host: each draws its candidates from its own distribution, the
 searches in parallel on the threads of the host, each with a generator seeded by a number
@@ -27,10 +27,10 @@ mutable struct DeviceCMAEmitter{E<:CMAEmitter} <: AbstractEmitter
     asked::Bool
 end
 
-function DeviceCMAEmitter(dim::Integer; num_emitters::Integer, kwargs...)
-    num_emitters >= 1 || throw(ArgumentError("num_emitters must be at least 1, got $num_emitters"))
+function DeviceCMAEmitter(dim::Integer; n_emitters::Integer, kwargs...)
+    n_emitters >= 1 || throw(ArgumentError("n_emitters must be at least 1, got $n_emitters"))
     first_search = CMAEmitter(dim; kwargs...)
-    searches = [first_search; [CMAEmitter(dim; kwargs...) for _ in 2:num_emitters]]
+    searches = [first_search; [CMAEmitter(dim; kwargs...) for _ in 2:n_emitters]]
     return DeviceCMAEmitter{typeof(first_search)}(searches, false)
 end
 

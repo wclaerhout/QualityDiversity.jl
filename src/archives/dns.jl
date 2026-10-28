@@ -149,15 +149,8 @@ finite.
 """
 function cell_index(archive::DNSArchive, d::AbstractVector{<:Real})
     point = checked_descriptor(archive, d)
-    best = 0
-    best_distance = Inf
-    for i in 1:archive.n
-        distance = sum(abs2, point - archive.descriptors[i])
-        if distance < best_distance
-            best, best_distance = i, distance
-        end
-    end
-    return best
+    archive.n == 0 && return 0
+    return argmin(i -> sum(abs2, point - archive.descriptors[i]), 1:archive.n)
 end
 
 """
@@ -286,7 +279,9 @@ end
 # smallest, so the score is the same as that of a pass over all of them.
 dominated_novelty(archive::DNSArchive, i, merged) = mean_nearest(archive, fitter_neighbours!(archive, i, 1, merged, 0))
 
-# The score of `dominated_novelty`, from a pass over all the merged solutions.
+# The score of `dominated_novelty`, from a pass over all the merged solutions. Distances are
+# `sqrt(sum(abs2, ·))`, not `norm`, which rescales tiny vectors, so that they round as the
+# bounding-box distances that `fitter_neighbours!` prunes with.
 function dominated_novelty_scan(archive::DNSArchive, i, merged)
     fitness = archive.merged_fitness[i]
     point = archive.merged_descriptors[i]
@@ -301,11 +296,7 @@ end
 # Mean of the first `count` distances of `nearest`, from the smallest, or `Inf` for none.
 function mean_nearest(archive::DNSArchive, count)
     count == 0 && return Inf
-    total = 0.0
-    for c in 1:count
-        total += archive.nearest[c]
-    end
-    return total / count
+    return sum(view(archive.nearest, 1:count)) / count
 end
 
 # Offers the solutions at positions `lo:hi` of the tree that are at least as fit as merged

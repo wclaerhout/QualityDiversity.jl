@@ -101,7 +101,7 @@ end
     QD.add!(archive, [2.0], Evaluation(SVector(2.0, 2.0), SVector(0.8, 0.2)))
     df = DataFrame(archive)
     @test names(df) == ["genotype", "fitness", "descriptor_1", "descriptor_2"]
-    @test nrow(df) == QD.num_solutions(archive) == 3 && length(archive) == 2
+    @test nrow(df) == QD.n_solutions(archive) == 3 && length(archive) == 2
     @test eltype(df.fitness) === SVector{2,Float64}
     @test df.fitness == [ev.fitness for (_, ev) in QD.elites(archive)]
     @test df.genotype == [x for (x, _) in QD.elites(archive)]

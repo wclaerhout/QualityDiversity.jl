@@ -36,7 +36,7 @@ end
 @testset "ParetoGridArchive construction" begin
     a = ParetoGridArchive((4, 5), ((0, 1), (-1, 1)); reference_point=[0.0, 0.0, 0.0], max_front=7)
     @test a isa ParetoGridArchive{Vector{Float64},3,2} && a isa QD.AbstractArchive{Vector{Float64},SVector{3,Float64},SVector{2,Float64}}
-    @test QD.capacity(a) == 20 && length(a) == 0 && QD.num_solutions(a) == 0 && a.max_front == 7
+    @test QD.capacity(a) == 20 && length(a) == 0 && QD.n_solutions(a) == 0 && a.max_front == 7
     @test QD.descriptor_bounds(a) == ((0.0, 1.0), (-1.0, 1.0)) && QD.reference_point(a) == SVector(0.0, 0.0, 0.0)
     prob = BiSphere(4)
     b = ParetoGridArchive(prob; dims=(5, 5), reference_point=QD.reference_point(prob), genotype=SVector{4,Float64})
@@ -59,36 +59,36 @@ end
     @test r.status == QD.NewCell && r.improvement == 3.0 && r isa QD.AddResult{Float64}
     r = QD.add!(a, [2.0], ev2(3, 1))
     @test r.status == QD.Improved && r.improvement == 2.0
-    @test length(a) == 1 && QD.num_solutions(a) == 2 && QD.qd_score(a) == 5.0
+    @test length(a) == 1 && QD.n_solutions(a) == 2 && QD.qd_score(a) == 5.0
     # equal or beaten in every objective: rejected, and the archive is unchanged
     for (f1, f2) in ((1, 3), (3, 1), (0.5, 0.5), (1, 1), (2.9, 1))
         r = QD.add!(a, [9.0], ev2(f1, f2))
         @test r.status == QD.Rejected && r.improvement == 0.0
     end
-    @test QD.num_solutions(a) == 2 && QD.qd_score(a) == 5.0
+    @test QD.n_solutions(a) == 2 && QD.qd_score(a) == 5.0
     # a solution on the front that adds area
     r = QD.add!(a, [3.0], ev2(2, 2))
-    @test r.status == QD.Improved && r.improvement == 1.0 && QD.qd_score(a) == 6.0 && QD.num_solutions(a) == 3
+    @test r.status == QD.Improved && r.improvement == 1.0 && QD.qd_score(a) == 6.0 && QD.n_solutions(a) == 3
     # a solution that beats some of the front removes those and keeps the others
     r = QD.add!(a, [4.0], ev2(2.5, 2.5))
-    @test r.status == QD.Improved && QD.num_solutions(a) == 3
+    @test r.status == QD.Improved && QD.n_solutions(a) == 3
     @test sort([g[1] for (g, _) in QD.elites(a)]) == [1.0, 2.0, 4.0]
     @test QD.qd_score(a) ≈ hypervolume([[1, 3], [3, 1], [2.5, 2.5]], [0, 0])
     # a solution that beats the whole front
     r = QD.add!(a, [5.0], ev2(4, 4))
-    @test QD.num_solutions(a) == 1 && r.improvement ≈ 16 - 7.25
+    @test QD.n_solutions(a) == 1 && r.improvement ≈ 16 - 7.25
     @test QD.qd_score(a) == 16.0
 
     # other cells are independent
     QD.add!(a, [6.0], ev2(1, 1, (0.9, 0.9)))
-    @test length(a) == 2 && QD.num_solutions(a) == 2 && QD.qd_score(a) == 17.0
+    @test length(a) == 2 && QD.n_solutions(a) == 2 && QD.qd_score(a) == 17.0
     @test QD.coverage(a) == 2 / 9
     @test QD.max_hypervolume(a) == 16.0 && QD.global_hypervolume(a) == 16.0
 
     # objectives below the reference point count as solutions with no volume
     b = pareto_archive()
     r = QD.add!(b, [1.0], ev2(-1, 5))
-    @test r.status == QD.NewCell && r.improvement == 0.0 && QD.num_solutions(b) == 1 && QD.qd_score(b) == 0.0
+    @test r.status == QD.NewCell && r.improvement == 0.0 && QD.n_solutions(b) == 1 && QD.qd_score(b) == 0.0
 
     @test_throws "the fitness of a solution must be a vector of 2 objectives for a ParetoGridArchive, got a Float64" QD.add!(a, [1.0], Evaluation(1.0, SVector(0.2, 0.2)))
     @test_throws "fitness has 3 objectives but the archive has 2" QD.add!(a, [1.0], Evaluation(SVector(1.0, 2.0, 3.0), SVector(0.2, 0.2)))
@@ -99,6 +99,10 @@ end
     @test_throws "outside the archive bounds" QD.add!(a, [1.0], ev2(1, 1, (2.0, 0.5)))
     rejecting = pareto_archive(outside=RejectOutside())
     @test QD.add!(rejecting, [1.0], ev2(1, 1, (2.0, 0.5))) == QD.AddResult(QD.Rejected, -Inf)
+    rs = QD.add_batch!(rejecting, [[1.0], [2.0]], [ev2(1, 1, (2.0, 0.5)), ev2(1, 1, (0.5, 0.5))])
+    @test rs[1] == QD.AddResult(QD.Rejected, -Inf) && rs[2].status == QD.NewCell
+    @test length(rejecting) == 1
+    empty!(rejecting)
     # the objectives are checked also for a solution the archive discards
     @test_throws "every objective must be finite" QD.add!(rejecting, [1.0], ev2(NaN, 1, (2.0, 0.5)))
     @test_throws "every objective must be finite" QD.add_batch!(rejecting, [[1.0]], [ev2(NaN, 1, (2.0, 0.5))])
@@ -115,18 +119,18 @@ end
     @test r.status == QD.Rejected && r.improvement == 0.0 && collect(QD.elites(a)) == before
     # a solution that beats one of the three still enters
     r = QD.add!(a, [8.0], ev2(0.6, 0.6))
-    @test r.status == QD.Improved && QD.num_solutions(a) == 3 && 8.0 in [g[1] for (g, _) in QD.elites(a)]
+    @test r.status == QD.Improved && QD.n_solutions(a) == 3 && 8.0 in [g[1] for (g, _) in QD.elites(a)]
 end
 
 @testset "duplicates" begin
     a = pareto_archive()
     @test a.duplicates === QD.RejectDuplicates()
     QD.add!(a, [1.0], ev2(1, 3))
-    @test QD.add!(a, [2.0], ev2(1, 3)) == QD.AddResult(QD.Rejected, 0.0) && QD.num_solutions(a) == 1
+    @test QD.add!(a, [2.0], ev2(1, 3)) == QD.AddResult(QD.Rejected, 0.0) && QD.n_solutions(a) == 1
     b = pareto_archive(duplicates=QD.KeepDuplicates())
     QD.add!(b, [1.0], ev2(1, 3))
     @test QD.add!(b, [2.0], ev2(1, 3)) == QD.AddResult(QD.Improved, 0.0)
-    @test QD.num_solutions(b) == 2 && QD.qd_score(b) == 3.0
+    @test QD.n_solutions(b) == 2 && QD.qd_score(b) == 3.0
     # a solution that beats both copies removes both; one that one copy beats stays out
     @test QD.add!(b, [3.0], ev2(0.5, 3)).status == QD.Rejected
     @test QD.add!(b, [4.0], ev2(1, 4)).status == QD.Improved
@@ -153,7 +157,7 @@ end
     a = full_front((0.1, 0.2, 0.9))
     before = QD.qd_score(a)
     r = QD.add!(a, [4.0], ev2(0.6, 0.4))
-    @test r.status == QD.Improved && ids(a) == [1.0, 3.0, 4.0] && QD.num_solutions(a) == 3
+    @test r.status == QD.Improved && ids(a) == [1.0, 3.0, 4.0] && QD.n_solutions(a) == 3
     @test r.improvement ≈ hypervolume([[0.1, 0.9], [0.6, 0.4], [0.9, 0.1]], [0, 0]) - before
     @test QD.qd_score(a) ≈ before + r.improvement
     # the new solution is the most crowded: rejected, and the archive is unchanged
@@ -232,7 +236,7 @@ end
         @test all(f -> !any(g -> g != f && all(g .>= f), front), front)
         duplicates isa QD.RejectDuplicates && @test allunique(front)
     end
-    @test QD.num_solutions(a) == sum(length, values(fronts))
+    @test QD.n_solutions(a) == sum(length, values(fronts))
     @test QD.qd_score(a) ≈ sum(hypervolume(front, [0.0, 0.0]) for front in values(fronts))
     @test QD.qd_score(a) ≈ sum(a.volumes) && a.volume_sum + a.volume_sum_error ≈ sum(a.volumes)
     @test QD.global_hypervolume(a) ≈ hypervolume(reduce(vcat, values(fronts)), [0.0, 0.0])
@@ -288,12 +292,12 @@ end
         QD.add!(b, x, ev)
     end
     fronts(arch) = sort([(QD.cell_index(arch, ev.descriptor), Tuple(ev.fitness)) for (_, ev) in QD.elites(arch)])
-    @test length(a) == length(b) && QD.num_solutions(a) == QD.num_solutions(b)
+    @test length(a) == length(b) && QD.n_solutions(a) == QD.n_solutions(b)
     @test QD.qd_score(a) ≈ QD.qd_score(b)
     # two solutions of one batch that beat each other: only the better one stays
     c = pareto_archive()
     rs = QD.add_batch!(c, [[1.0], [2.0]], [ev2(1, 1), ev2(2, 2)])
-    @test [r.status for r in rs] == [QD.NewCell, QD.NewCell] && QD.num_solutions(c) == 1
+    @test [r.status for r in rs] == [QD.NewCell, QD.NewCell] && QD.n_solutions(c) == 1
     @test only(QD.elites(c))[1] == [2.0]
     @test_throws "got 2 solutions but 1 evaluations" QD.add_batch!(c, [[1.0], [2.0]], [ev2(1, 1)])
 
@@ -340,10 +344,10 @@ end
     @test_throws "the MOQD score of a ParetoGridArchive takes no offset" QD.qd_score(a; offset=1.0)
     @test QD.qd_score(a; offset=0) == 9.0
     record = QD.metrics_record(a, 17, 0)
-    @test record == (n_evals=17, qd_score=9.0, coverage=2 / 9, max_hypervolume=5.0, num_solutions=3)
+    @test record == (n_evals=17, qd_score=9.0, coverage=2 / 9, max_hypervolume=5.0, n_solutions=3)
     @test QD.metrics_record_type(typeof(a)) == typeof(record)
     empty!(a)
-    @test length(a) == 0 && QD.num_solutions(a) == 0 && QD.qd_score(a) == 0 && isempty(collect(QD.elites(a)))
+    @test length(a) == 0 && QD.n_solutions(a) == 0 && QD.qd_score(a) == 0 && isempty(collect(QD.elites(a)))
     @test QD.metrics_record(a, 0, 0).max_hypervolume == 0.0
     @test QD.add!(a, [1.0], ev2(1, 3)).status == QD.NewCell
 
@@ -360,7 +364,7 @@ end
         QD.add!(b, [0.0], Evaluation(SVector(volume, 1.0), d))        # dominates the first point
         exact += volume
     end
-    @test QD.num_solutions(b) == 1000
+    @test QD.n_solutions(b) == 1000
     two_terms = BigFloat(b.volume_sum) + BigFloat(b.volume_sum_error)
     @test abs(two_terms - exact) <= 1e-24 * exact
     @test QD.qd_score(b) == Float64(exact)
@@ -398,9 +402,9 @@ end
     history = result.history
     @test eltype(history) == QD.ParetoMetricsRecord && history[1].n_evals == 32 && history[end].n_evals == result.n_evals
     @test issorted([h.qd_score for h in history])                       # fronts only gain volume
-    @test history[end].qd_score == QD.qd_score(result.archive) && history[end].num_solutions == QD.num_solutions(result.archive)
+    @test history[end].qd_score == QD.qd_score(result.archive) && history[end].n_solutions == QD.n_solutions(result.archive)
     @test history[end].coverage == QD.coverage(result.archive) && history[end].max_hypervolume == QD.max_hypervolume(result.archive)
-    @test QD.num_solutions(result.archive) > length(result.archive)            # fronts hold several solutions
+    @test QD.n_solutions(result.archive) > length(result.archive)            # fronts hold several solutions
     @test QD.max_scores(result.archive)[1] > -2 && QD.max_scores(result.archive)[2] > -2
     # a run is reproducible from its seed
     again = solve(prob, alg; budget=6_000, rng=Xoshiro(1))
@@ -417,8 +421,8 @@ end
     QD.add_batch!(narrow, xs, evs)
     @test length(wide) == length(narrow)
     @test all(wide.volumes .>= narrow.volumes) && QD.qd_score(wide) > QD.qd_score(narrow)
-    @test QD.num_solutions(narrow) <= 2 * length(narrow)
-    @test QD.num_solutions(narrow) < QD.num_solutions(wide)
+    @test QD.n_solutions(narrow) <= 2 * length(narrow)
+    @test QD.n_solutions(narrow) < QD.n_solutions(wide)
 end
 
 @testset "a batch leaves the fronts as adding one at a time does" begin

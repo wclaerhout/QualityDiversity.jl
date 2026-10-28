@@ -8,7 +8,7 @@ Every algorithm is an archive and a tuple of emitters. The constructors below ch
 both with the rules of the paper that introduced the algorithm, with one exception:
 [`CMAME`](@ref) and [`CMAMAE`](@ref) run five emitters with the batch size of CMA-ES
 rather than the 15 emitters of 36 candidates of the papers, which cost about ten times
-more evaluations per round; pass `num_emitters=15, batch_size=36` for the papers'
+more evaluations per round; pass `n_emitters=15, batch_size=36` for the papers'
 settings. The API reference gives every keyword.
 
 ## Algorithms

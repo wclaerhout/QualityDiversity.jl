@@ -69,7 +69,7 @@ end
 
 @testset "add_batch! agrees with GridArchive" begin
     rng = Xoshiro(1)
-    for outside in (ThrowOutside(), ClampOutside(), RejectOutside()), F in (Float64, Float32, Int)
+    for outside in (ThrowOutside(), ClampOutside(), RejectOutside()), F in (Float64, Float32, Float16, Int, UInt32)
         host = GridArchive{Vector{Float64},F}((4, 3), ((0, 1), (0, 1)); outside)
         dev = DeviceGridArchive{Float64,F}(Array, (4, 3), ((0, 1), (0, 1)), 3; outside)
         reach = outside isa ThrowOutside ? (0.0, 1.0) : (-0.3, 1.3)
@@ -77,7 +77,7 @@ end
             n = rand(rng, 1:60)
             xs = [randn(rng, 3) for _ in 1:n]
             # few distinct fitness values, so that solutions tie for a cell
-            evs = [Evaluation(F(rand(rng, -3:3)), SVector(reach[1] + (reach[2] - reach[1]) * rand(rng),
+            evs = [Evaluation(F(rand(rng, F <: Unsigned ? (0:6) : (-3:3))), SVector(reach[1] + (reach[2] - reach[1]) * rand(rng),
                                                           reach[1] + (reach[2] - reach[1]) * rand(rng)))
                    for _ in 1:n]
             @test QD.add_batch!(dev, xs, evs) == QD.add_batch!(host, xs, evs)
@@ -176,6 +176,9 @@ end
     @test_throws "the evaluation has a phenotype of type String but the archive stores none" QD.add_batch!(dev, xs[1:1], [Evaluation(1.0, SVector(0.1, 0.2), "p")])
     @test_throws "descriptors must be 2 × 3, one column per solution, got 2 × 2" QD.EvaluationBatch{2}(zeros(3), zeros(2, 2))
     @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_add_batch!(nothing, nothing, nothing, nothing)
+    @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_evaluate!(nothing, nothing, nothing, nothing)
+    @test_throws "the kernels of the device archives need KernelAbstractions.jl" QD.device_vary!(nothing, nothing, nothing, nothing)
+    @test_throws "a BanditScheduler collects the batches of its emitters in a Vector and cannot run on a DeviceCellArchive" QD.ask(Xoshiro(1), BanditScheduler((VariationEmitter(GaussianMutation(0.1); batch_size=2),); n_active=1), dev)
 end
 
 @testset "conformance" begin
@@ -271,6 +274,8 @@ end
     @test_throws "the descriptor of QDProblem has 3 dimensions but its bounds have 2" QD.evaluate_batch(wrong, QD.DeviceBatch(rand(3, 2)))
     vector = QDProblem(x -> (-sum(abs2, x), x[1:2]); init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
     @test_throws "it must be a tuple or an SVector" QD.evaluate_batch(vector, QD.DeviceBatch(rand(3, 2)))
+    multi = QDProblem(x -> ([x[1], x[2]], (x[1], x[2])); init=rng -> rand(rng, 3), bounds=((0, 1), (0, 1)))
+    @test_throws "not an Evaluation with a real fitness; define QualityDiversity.evaluate_batch(prob::QDProblem, xs::DeviceBatch)" QD.evaluate_batch(multi, QD.DeviceBatch(rand(3, 2)))
     @test_throws "is a stochastic problem" QD.evaluate_batch(StochasticQDProblem((rng, x) -> (0.0, (0.0, 0.0)); init=rng -> rand(rng, 2), bounds=((0, 1), (0, 1))), QD.DeviceBatch(rand(2, 2)))
 end
 
@@ -402,6 +407,9 @@ end
         @test converted isa CVTArchive{Vector{Float64},F}
         @test elites_by_cell(h, converted) == elites_by_cell(h, h)
     end
+    strict = DeviceCVTArchive{Float64,Float64}(Array, 30, ((0, 1), (0, 2)), 3; samples=3000, rng=Xoshiro(7))
+    @test_throws "descriptor component 2 is 2.5, outside the archive bounds" QD.add_batch!(strict, [zeros(3)], [Evaluation(1.0, SVector(0.5, 2.5))])
+    @test length(strict) == 0
 
     # the kernels assign the cell of the host k-d tree, also at exact ties between centroids
     step = 1 / 10
@@ -437,38 +445,38 @@ end
 
 @testset "DeviceCMAEmitter" begin
     prob = Rastrigin(6)
-    emitter = QD.DeviceCMAEmitter(6; num_emitters=4, sigma0=0.5)
+    emitter = QD.DeviceCMAEmitter(6; n_emitters=4, sigma0=0.5)
     @test QD.batch_size(emitter) == 4 * QD.batch_size(emitter.searches[1])
     @test length(emitter.searches) == 4
     # every search keeps its own copy of a ranker with state
-    directed = QD.DeviceCMAEmitter(6; num_emitters=2, sigma0=0.5, ranker=QD.TwoStageRandomDirectionRanker())
+    directed = QD.DeviceCMAEmitter(6; n_emitters=2, sigma0=0.5, ranker=QD.TwoStageRandomDirectionRanker())
     @test directed.searches[1].ranker !== directed.searches[2].ranker
-    @test_throws "num_emitters must be at least 1, got 0" QD.DeviceCMAEmitter(6; num_emitters=0, sigma0=0.5)
+    @test_throws "n_emitters must be at least 1, got 0" QD.DeviceCMAEmitter(6; n_emitters=0, sigma0=0.5)
 
     archive = DeviceGridArchive(prob; dims=(10, 10), device=Array)
     xs = [QD.random_solution(Xoshiro(k), prob) for k in 1:30]
     QD.add_batch!(archive, xs, [QD.evaluate(prob, x) for x in xs])
-    test_emitter(QD.DeviceCMAEmitter(6; num_emitters=3, sigma0=0.5), deepcopy(archive), prob)
+    test_emitter(QD.DeviceCMAEmitter(6; n_emitters=3, sigma0=0.5), deepcopy(archive), prob)
 
     # the searches start from x0, or from elites of the archive
-    near = QD.DeviceCMAEmitter(6; num_emitters=3, sigma0=1e-6, x0=fill(0.25, 6))
+    near = QD.DeviceCMAEmitter(6; n_emitters=3, sigma0=1e-6, x0=fill(0.25, 6))
     batch = QD.ask(Xoshiro(1), near, archive)
     @test batch isa QD.DeviceBatch{Float64}
     @test all(x -> maximum(abs, x .- 0.25) < 1e-4, batch)
     elite_set = [x for (x, _) in QD.elites(archive)]
-    from_elites = QD.DeviceCMAEmitter(6; num_emitters=5, sigma0=1e-6)
+    from_elites = QD.DeviceCMAEmitter(6; n_emitters=5, sigma0=1e-6)
     @test all(x -> any(e -> maximum(abs, x - e) < 1e-4, elite_set), QD.ask(Xoshiro(2), from_elites, archive))
     @test collect(QD.ask(Xoshiro(3), deepcopy(near), archive)) == collect(QD.ask(Xoshiro(3), deepcopy(near), archive))
 
-    @test_throws "tell! needs the results of the batch that the last ask returned" QD.tell!(QD.DeviceCMAEmitter(6; num_emitters=2, sigma0=0.5), [], [], [])
+    @test_throws "tell! needs the results of the batch that the last ask returned" QD.tell!(QD.DeviceCMAEmitter(6; n_emitters=2, sigma0=0.5), [], [], [])
     asked = deepcopy(near)
     b = QD.ask(Xoshiro(1), asked, archive)
     @test_throws "expected 27 solutions, evaluations and results but got 2, 2 and 2" QD.tell!(asked, b[1:2], b[1:2], b[1:2])
     @test_throws "a DeviceCMAEmitter adds its candidates to a device archive such as a DeviceGridArchive, not a GridArchive" QD.ask(Xoshiro(1), near, GridArchive(prob; dims=(2, 2)))
-    @test_throws "the solutions of the archive have 6 entries but the emitter has dimension 4" QD.ask(Xoshiro(1), QD.DeviceCMAEmitter(4; num_emitters=2, sigma0=0.5), archive)
+    @test_throws "the solutions of the archive have 6 entries but the emitter has dimension 4" QD.ask(Xoshiro(1), QD.DeviceCMAEmitter(4; n_emitters=2, sigma0=0.5), archive)
 
     # CMA-ME on a device: reproducible, with restarts, close to the host in quality
-    alg = CMAME(prob; dims=(10, 10), sigma0=0.5, num_emitters=8, device=Array)
+    alg = CMAME(prob; dims=(10, 10), sigma0=0.5, n_emitters=8, device=Array)
     @test alg.archive isa DeviceGridArchive
     @test only(alg.emitters) isa QD.DeviceCMAEmitter
     result = solve(prob, alg; budget=10_000, rng=Xoshiro(1))
@@ -476,7 +484,7 @@ end
     @test solve(prob, alg; budget=10_000, rng=Xoshiro(1)).history == result.history
     # the mean over seeds: a single run varies by about 0.1 in coverage
     mean_coverage(alg) = sum(s -> coverage(solve(prob, alg; budget=20_000, rng=Xoshiro(s)).archive), 1:6) / 6
-    @test abs(mean_coverage(alg) - mean_coverage(CMAME(prob; dims=(10, 10), sigma0=0.5, num_emitters=8))) < 0.1
+    @test abs(mean_coverage(alg) - mean_coverage(CMAME(prob; dims=(10, 10), sigma0=0.5, n_emitters=8))) < 0.1
     state = init(prob, alg; budget=10_000, rng=Xoshiro(1))
     solve!(state)
     @test sum(s.restarts for s in only(state.emitters).searches) > 0
@@ -485,12 +493,12 @@ end
     # every ranker and strategy runs, on JLArrays as well, over a grid or a CVT archive
     for kwargs in ((; ranker=QD.TwoStageRandomDirectionRanker()), (; ranker=QD.ObjectiveRanker(), selection=QD.MuSelection()),
                    (; strategy=QD.SepCMAES), (; strategy=QD.OpenAIES, restart=QD.ConvergenceRestart()))
-        jl = CMAME(prob; dims=(10, 10), sigma0=0.5, num_emitters=4, device=JLArray, genotype=Vector{Float32},
+        jl = CMAME(prob; dims=(10, 10), sigma0=0.5, n_emitters=4, device=JLArray, genotype=Vector{Float32},
                    fitness=Float32, kwargs...)
         @test coverage(solve(prob, jl; budget=3_000, rng=Xoshiro(2)).archive) > 0.2
     end
     cvt = CMAME(DeviceCVTArchive(prob; cells=50, samples=5000, device=Array, rng=Xoshiro(1)); sigma0=0.5, dim=6,
-                num_emitters=4)
+                n_emitters=4)
     @test coverage(solve(prob, cvt; budget=3_000, rng=Xoshiro(2)).archive) > 0.3
     @test_throws "a DeviceGridArchive stores no phenotypes" CMAME(prob; dims=(2, 2), sigma0=0.5, device=Array, phenotype=String)
 end

@@ -1,7 +1,8 @@
 # Reference values for test_dns.jl: the solutions that QDax's DominatedNoveltyRepertoire
 # and pyribs's DNSArchive keep after each batch of a sequence. `python3 generate_dns.py`
 # rewrites `dns.jl` next to it. Needs qdax at commit 46b8fee (DNS is not in qdax 0.5.0)
-# and ribs 0.12.0.
+# and ribs 0.12.0: the packages of requirements.txt, with qdax replaced by
+# `pip install "qdax @ git+https://github.com/adaptive-intelligent-robotics/QDax.git@46b8fee"`.
 #
 # Every solution carries its number as its genotype, so a population is the set of numbers
 # it keeps. The descriptors are drawn from a continuous distribution, so no two dominated

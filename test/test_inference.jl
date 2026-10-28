@@ -80,17 +80,17 @@ end
 
 @testset "inference with CMA emitters" begin
     prob = Rastrigin(6)
-    for alg in (CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2),
-                CMAMAE(prob; dims=(8, 8), sigma0=1.0, threshold_min=-500.0, learning_rate=0.1, num_emitters=2),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, ranker=QD.ObjectiveRanker(), selection=QD.MuSelection()),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, ranker=QD.TwoStageRandomDirectionRanker()),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, ranker=QD.RandomDirectionRanker()),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, ranker=QD.AcceptedRandomDirectionRanker()),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, strategy=QD.PyribsCMAES),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, ranker=QD.TwoStageObjectiveRanker()),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, strategy=QD.SepCMAES),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, strategy=QD.OpenAIES),
-                CMAME(prob; dims=(8, 8), sigma0=1.0, num_emitters=2, strategy=QD.LMMAES, batch_size=3))
+    for alg in (CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2),
+                CMAMAE(prob; dims=(8, 8), sigma0=1.0, threshold_min=-500.0, learning_rate=0.1, n_emitters=2),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, ranker=QD.ObjectiveRanker(), selection=QD.MuSelection()),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, ranker=QD.TwoStageRandomDirectionRanker()),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, ranker=QD.RandomDirectionRanker()),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, ranker=QD.AcceptedRandomDirectionRanker()),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, strategy=QD.PyribsCMAES),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, ranker=QD.TwoStageObjectiveRanker()),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, strategy=QD.SepCMAES),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, strategy=QD.OpenAIES),
+                CMAME(prob; dims=(8, 8), sigma0=1.0, n_emitters=2, strategy=QD.LMMAES, batch_size=3))
         state = @inferred init(prob, alg; budget=600, rng=Xoshiro(1))
         emitter = state.emitters[1]
         xs = @inferred QD.ask(Xoshiro(1), emitter, state.archive)
@@ -188,7 +188,7 @@ end
     prob = Rastrigin(4)
     pool = (VariationEmitter(GaussianMutation(0.1); batch_size=8), VariationEmitter(IsoLineVariation(0.01, 0.1); batch_size=4),
             (CMAEmitter(4; sigma0=0.5, batch_size=6) for _ in 1:30)...)
-    scheduler = BanditScheduler(pool; num_active=3)
+    scheduler = BanditScheduler(pool; n_active=3)
     state = init(prob, QDAlgorithm(GridArchive(prob; dims=(5, 5)), (scheduler,)); budget=10_000, rng=Xoshiro(1))
     @inferred step!(state)
     @inferred QD.ask(Xoshiro(1), state.emitters[1], state.archive)
@@ -238,7 +238,7 @@ end
         @test allocated(QD.add!, archive, xs[1], pevs[1]) == 0
     end
     prob4 = Rastrigin(4)
-    state = init(prob4, DDS(prob4; dims=(5, 5), sigma0=0.5, bandwidth=0.5, num_emitters=2, rng=Xoshiro(1)); budget=10_000, rng=Xoshiro(1))
+    state = init(prob4, DDS(prob4; dims=(5, 5), sigma0=0.5, bandwidth=0.5, n_emitters=2, rng=Xoshiro(1)); budget=10_000, rng=Xoshiro(1))
     @inferred step!(state)
 end
 
@@ -372,11 +372,11 @@ end
                                 init=rng -> randn(rng, 4), bounds=((-3, 3), (-3, 3)))
     x = QD.random_solution(Xoshiro(1), noisy)
     @inferred QD.evaluate(Xoshiro(1), noisy, x)
-    @inferred QD.evaluate(Xoshiro(1), Sampled(noisy; num_samples=3), x)
-    @inferred QD.evaluate(Xoshiro(1), Sampled(noisy; num_samples=3, expectation=QD.Median()), x)
+    @inferred QD.evaluate(Xoshiro(1), Sampled(noisy; n_samples=3), x)
+    @inferred QD.evaluate(Xoshiro(1), Sampled(noisy; n_samples=3, expectation=QD.Median()), x)
     @inferred QD.evaluate_batch(Xoshiro(1), noisy, [x, x])
-    @inferred QD.evaluations_per_solution(Sampled(noisy; num_samples=3))
-    for prob in (noisy, Sampled(noisy; num_samples=3))
+    @inferred QD.evaluations_per_solution(Sampled(noisy; n_samples=3))
+    for prob in (noisy, Sampled(noisy; n_samples=3))
         state = @inferred init(prob, MAPElites(prob; dims=(5, 5), batch_size=8); budget=400, rng=Xoshiro(1))
         @inferred step!(state)
         @inferred solve!(state)
@@ -410,7 +410,7 @@ end
         QD.add!(crowded, k, on_line(t))
     end
     r = @inferred QD.add!(crowded, 4, on_line(0.6))
-    @test r.status == QD.Improved && QD.num_solutions(crowded) == 3
+    @test r.status == QD.Improved && QD.n_solutions(crowded) == 3
     @test allocated(QD.add!, crowded, 5, on_line(0.65)) == 0
     @test allocated(QD.add!, crowded, 6, on_line(0.15)) == 0
     # nor does a front of three objectives

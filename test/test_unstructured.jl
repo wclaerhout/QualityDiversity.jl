@@ -246,7 +246,7 @@ end
     @test a.tree_size > 0
     @test [(ev.fitness, ev.descriptor) for (_, ev) in QD.elites(a)] == slots
     empty!(a)
-    @test length(a) == 0 && a.tree_size == 0 && a.num_pending == 0
+    @test length(a) == 0 && a.tree_size == 0 && a.n_pending == 0
     @test QD.add!(a, [1.0], Evaluation(1.0, zero(SVector{N,Float64}))).status == QD.NewCell
 end
 

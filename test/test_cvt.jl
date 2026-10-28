@@ -71,6 +71,13 @@ end
     @test QD.kmeans(Xoshiro(4), samples, 100) != centers
     @test QD.kmeans(Xoshiro(3), samples, 1) ≈ [sum(samples) / length(samples)]
 
+    # once every sample lies on a seed, the next seeds are drawn uniformly from the samples
+    few = [SVector(0.0, 0.0), SVector(1.0, 1.0), SVector(0.0, 0.0)]
+    for seeding in (QD.KMeansPlusPlus(), QD.GreedyKMeansPlusPlus())
+        seeds = QD.kmeans_seeds(Xoshiro(1), seeding, few, 4)
+        @test length(seeds) == 4 && all(in(few), seeds) && Set(seeds) == Set(few)
+    end
+
     # greedy k-means++ seeds are distinct samples, closer to the samples than k-means++ seeds;
     # after Lloyd's iterations the two end close together for so few cells
     greedy = QD.kmeans_seeds(Xoshiro(3), QD.GreedyKMeansPlusPlus(), samples, 100)
