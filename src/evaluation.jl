@@ -120,6 +120,8 @@ outside_result(::Type{F}) where {F} = AddResult(Rejected, outside_improvement(F)
 # mismatch throws before the archive changes.
 function stored_phenotype(::Type{P}, phenotype) where {P}
     phenotype isa P && return phenotype
+    # Julia cannot ask whether a conversion exists (`hasmethod` sees the generic fallbacks
+    # of `convert`), so a missing one is caught here; any other error passes through.
     try
         return convert(P, phenotype)
     catch err

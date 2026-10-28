@@ -38,7 +38,7 @@ function hypervolume(points, reference_point::AbstractVector{<:Real})
 end
 
 # Volume above `ref` of the points in `pts` (all above `ref`) in the first `d` objectives.
-function slice_volume(pts::Vector{Vector{Float64}}, ref::Vector{Float64}, d::Int)
+function slice_volume(pts, ref, d)
     isempty(pts) && return 0.0
     if d == 1
         return maximum(p[1] for p in pts) - ref[1]
