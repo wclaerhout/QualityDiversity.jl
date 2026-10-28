@@ -200,7 +200,7 @@ end
         (("adam", QD.AdamAscent(; learning_rate=0.05), mega_adam_thetas, mega_adam_branches, mega_adam_orders, mega_adam_parents),
          ("ascent", QD.GradientAscent(0.5), mega_ascent_thetas, mega_ascent_branches, mega_ascent_orders, mega_ascent_parents))
         @testset "$name" begin
-            emitter = GradientArborescenceEmitter(mega_x0; num_descriptors=2, sigma0=1.0, optimizer,
+            emitter = GradientArborescenceEmitter(mega_x0; n_descriptors=2, sigma0=1.0, optimizer,
                                                   strategy=(dim; kwargs...) -> ScriptedStrategy(mega_coefficients),
                                                   restart=QD.ConvergenceRestart())
             archive = GridArchive((10, 10), ((-2, 2), (-2, 2)); outside=ClampOutside())
@@ -216,13 +216,13 @@ end
 end
 
 @testset "GradientArborescenceEmitter" begin
-    @test_throws "num_descriptors must be at least 1, got 0" GradientArborescenceEmitter(3; num_descriptors=0, sigma0=1)
-    @test_throws "dim must be at least 1, got 0" GradientArborescenceEmitter(0; num_descriptors=2, sigma0=1)
-    @test_throws "x0 has 2 entries but the dimension is 3" GradientArborescenceEmitter(3; num_descriptors=2, sigma0=1, x0=[0, 0])
-    @test_throws "strategy must construct an AbstractEvolutionStrategy" GradientArborescenceEmitter(3; num_descriptors=2, sigma0=1, strategy=(d; kw...) -> 1)
+    @test_throws "n_descriptors must be at least 1, got 0" GradientArborescenceEmitter(3; n_descriptors=0, sigma0=1)
+    @test_throws "dim must be at least 1, got 0" GradientArborescenceEmitter(0; n_descriptors=2, sigma0=1)
+    @test_throws "x0 has 2 entries but the dimension is 3" GradientArborescenceEmitter(3; n_descriptors=2, sigma0=1, x0=[0, 0])
+    @test_throws "strategy must construct an AbstractEvolutionStrategy" GradientArborescenceEmitter(3; n_descriptors=2, sigma0=1, strategy=(d; kw...) -> 1)
 
     prob = smooth_problem(4)
-    emitter = GradientArborescenceEmitter(4; num_descriptors=2, sigma0=0.5)
+    emitter = GradientArborescenceEmitter(4; n_descriptors=2, sigma0=0.5)
     @test QD.batch_size(emitter) == 4 + floor(Int, 3 * log(3))
     @test QD.restarts(emitter) == 0
     @test QD.uses_gradients(emitter) && !QD.uses_gradients(CMAEmitter(4; sigma0=1.0))
@@ -251,7 +251,7 @@ end
     @test emitter.ascent.theta == fill(0.3, 4)    # no parent, no step
 
     # Without normalization the gradients are kept as they are.
-    raw = GradientArborescenceEmitter(4; num_descriptors=2, sigma0=0.5, normalize=false, x0=fill(0.1, 4))
+    raw = GradientArborescenceEmitter(4; n_descriptors=2, sigma0=0.5, normalize=false, x0=fill(0.1, 4))
     point = QD.ask_gradients(Xoshiro(1), raw, archive)
     @test point == [fill(0.1, 4)]
     _, jacobians = QD.evaluate_gradient_batch(prob, point)
@@ -260,19 +260,19 @@ end
 
     filled() = (a = GridArchive(prob; dims=(5, 5)); QD.add!(a, fill(0.3, 4), QD.evaluate(prob, fill(0.3, 4))); a)
     for optimizer in (QD.AdamAscent(), QD.GradientAscent(1.0)), ranker in (QD.TwoStageImprovementRanker(), QD.ImprovementRanker())
-        test_emitter(GradientArborescenceEmitter(4; num_descriptors=2, sigma0=0.5, optimizer, ranker), filled(), prob)
+        test_emitter(GradientArborescenceEmitter(4; n_descriptors=2, sigma0=0.5, optimizer, ranker), filled(), prob)
     end
-    test_emitter(GradientArborescenceEmitter(4; num_descriptors=2, sigma0=0.5, strategy=QD.SepCMAES, batch_size=6), filled(), prob)
-    test_emitter(GradientArborescenceEmitter(4; num_descriptors=2, sigma0=0.5), GradientArchive(ThresholdArchive(GridArchive(prob; dims=(5, 5)))) |>
+    test_emitter(GradientArborescenceEmitter(4; n_descriptors=2, sigma0=0.5, strategy=QD.SepCMAES, batch_size=6), filled(), prob)
+    test_emitter(GradientArborescenceEmitter(4; n_descriptors=2, sigma0=0.5), GradientArchive(ThresholdArchive(GridArchive(prob; dims=(5, 5)))) |>
                  (a -> (QD.add!(a, fill(0.3, 4), QD.evaluate_gradient(prob, fill(0.3, 4))...); a)), prob)
 
-    @test_throws "pool[2] is a GradientArborescenceEmitter, which needs gradients before it asks" BanditScheduler((CMAEmitter(4; sigma0=1.0), emitter); num_active=1)
+    @test_throws "pool[2] is a GradientArborescenceEmitter, which needs gradients before it asks" BanditScheduler((CMAEmitter(4; sigma0=1.0), emitter); n_active=1)
 end
 
 @testset "CMAMEGA, CMAMAEGA and OMGMEGA" begin
     prob = Sphere(20)
     algs = (CMAMEGA(prob; dims=(20, 20), sigma0=10.0),
-            CMAMEGA(prob; dims=(20, 20), sigma0=10.0, optimizer=QD.GradientAscent(1.0), num_emitters=2, batch_size=10),
+            CMAMEGA(prob; dims=(20, 20), sigma0=10.0, optimizer=QD.GradientAscent(1.0), n_emitters=2, batch_size=10),
             CMAMAEGA(prob; dims=(20, 20), sigma0=10.0, threshold_min=0),
             OMGMEGA(prob; dims=(20, 20), sigma0=10.0, batch_size=16))
     @test length(algs[2].emitters) == 2 && QD.batch_size(algs[2].emitters[1]) == 10
@@ -304,7 +304,7 @@ end
     @test_throws "differentiable quality diversity takes deterministic problems, but StochasticQDProblem is stochastic" init(noisy, CMAMEGA(noisy; dims=(4, 4), sigma0=1.0); budget=100)
     @test_throws "differentiable quality diversity takes deterministic problems" init(noisy, OMGMEGA(noisy; dims=(4, 4), sigma0=1.0); budget=100)
     labelled = QDProblem(x -> (sum(x), (1, 2)); init=rng -> rand(rng, 2), categories=(1:3, 1:3))
-    alg = QDAlgorithm(GridArchive((3, 3), ((0, 3), (0, 3))), (GradientArborescenceEmitter(2; num_descriptors=2, sigma0=1.0),))
+    alg = QDAlgorithm(GridArchive((3, 3), ((0, 3), (0, 3))), (GradientArborescenceEmitter(2; n_descriptors=2, sigma0=1.0),))
     @test_throws "needs real descriptors, but QDProblem has descriptor_categories" init(labelled, alg; budget=100)
 
     # A Jacobian from the problem is checked before anything uses it.

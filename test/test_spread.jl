@@ -20,7 +20,7 @@ noisy = StochasticQDProblem((rng, x) -> (-sum(abs2, x) + 0.1 * randn(rng),
 end
 
 @testset "SampledSpread" begin
-    prob = SampledSpread(noisy; num_samples=6)
+    prob = SampledSpread(noisy; n_samples=6)
     x = [0.1, 0.2, 0.3]
     ev = QD.evaluate(Xoshiro(1), prob, x)
     rng = Xoshiro(1)
@@ -28,7 +28,7 @@ end
     @test ev.descriptor isa QD.DescriptorSamples{2}
     @test collect(ev.descriptor) == [s.descriptor for s in single]
     @test ev.fitness ≈ sum(s.fitness for s in single) / 6
-    @test QD.evaluate(Xoshiro(1), SampledSpread(noisy; num_samples=6, expectation=QD.Median()), x).fitness ==
+    @test QD.evaluate(Xoshiro(1), SampledSpread(noisy; n_samples=6, expectation=QD.Median()), x).fitness ==
           QD.expectation(QD.Median(), [s.fitness for s in single])
     # descriptors of another number type are kept as Float64
     wide = QD.evaluate(Xoshiro(1), prob, big.(x))
@@ -36,17 +36,17 @@ end
     @test QD.evaluations_per_solution(prob) == 6
     @test QD.descriptor_bounds(prob) == QD.descriptor_bounds(noisy)
     test_problem(prob)
-    test_problem(SampledSpread(noisy; num_samples=1))
+    test_problem(SampledSpread(noisy; n_samples=1))
 
     labelled = StochasticQDProblem((rng, x) -> (0.0, (x[1], x[2]), rand(rng, 1:2)); init=rng -> rand(rng, 2),
                                    bounds=((0, 1), (0, 1)))
     rng = Xoshiro(4)
     draws = [QD.evaluate(rng, labelled, x).phenotype for _ in 1:5]
-    @test QD.evaluate(Xoshiro(4), SampledSpread(labelled; num_samples=5), x).phenotype == QD.most_frequent(draws)
+    @test QD.evaluate(Xoshiro(4), SampledSpread(labelled; n_samples=5), x).phenotype == QD.most_frequent(draws)
 
-    @test_throws "SampledSpread needs a stochastic problem, but Rastrigin is deterministic" SampledSpread(Rastrigin(2); num_samples=3)
-    @test_throws "num_samples must be at least 1, got 0" SampledSpread(noisy; num_samples=0)
-    @test_throws "SampledSpread needs a real fitness" QD.evaluate(Xoshiro(1), SampledSpread(StochasticQDProblem((rng, x) -> ([1.0, 2.0], (0.0, 0.0)); init=rng -> [0.0], bounds=((0, 1), (0, 1))); num_samples=2), [0.0])
+    @test_throws "SampledSpread needs a stochastic problem, but Rastrigin is deterministic" SampledSpread(Rastrigin(2); n_samples=3)
+    @test_throws "n_samples must be at least 1, got 0" SampledSpread(noisy; n_samples=0)
+    @test_throws "SampledSpread needs a real fitness" QD.evaluate(Xoshiro(1), SampledSpread(StochasticQDProblem((rng, x) -> ([1.0, 2.0], (0.0, 0.0)); init=rng -> [0.0], bounds=((0, 1), (0, 1))); n_samples=2), [0.0])
 end
 
 @testset "construction" begin
@@ -141,7 +141,7 @@ end
 end
 
 @testset "add_batch!" begin
-    prob = SampledSpread(noisy; num_samples=5)
+    prob = SampledSpread(noisy; n_samples=5)
     for seed in 1:5
         rng = Xoshiro(seed)
         xs = [QD.random_solution(rng, prob) for _ in 1:300]
@@ -198,7 +198,7 @@ end
 end
 
 @testset "conformance" begin
-    prob = SampledSpread(noisy; num_samples=5)
+    prob = SampledSpread(noisy; n_samples=5)
     batchwise = (; sequential_batch=false)
     test_archive(() -> SpreadArchive(GridArchive(prob; dims=(6, 6))), prob; batchwise...)
     test_archive(() -> SpreadArchive(GridArchive(prob; dims=(1, 1))), prob; batchwise...)
@@ -206,18 +206,18 @@ end
     test_archive(() -> SpreadArchive(GridArchive(prob; dims=(6, 6), outside=RejectOutside())), prob; batchwise...)
     test_archive(() -> SpreadArchive(CVTArchive(prob; cells=30, samples=3_000, rng=Xoshiro(1))), prob; batchwise...)
 
-    single = SampledSpread(noisy; num_samples=1)
+    single = SampledSpread(noisy; n_samples=1)
     test_archive(() -> SpreadArchive(GridArchive(single; dims=(6, 6))), single; batchwise...)
 
     # an isbits genotype, for the allocation checks
     bits = SampledSpread(StochasticQDProblem((rng, x) -> (-sum(abs2, x), (clamp(x[1] + 0.1 * randn(rng), -1, 1), clamp(x[2], -1, 1)));
                                              init=rng -> SVector{3,Float64}(2 .* rand(rng, 3) .- 1), bounds=((-1, 1), (-1, 1)));
-                         num_samples=4)
+                         n_samples=4)
     test_archive(() -> SpreadArchive(GridArchive{SVector{3,Float64}}((6, 6), ((-1, 1), (-1, 1)))), bits; batchwise...)
 
     labelled = SampledSpread(StochasticQDProblem((rng, x) -> (-sum(abs2, x), (clamp(x[1] + 0.1 * randn(rng), -1, 1), clamp(x[2], -1, 1)), round(Int, 10 * x[3]));
                                                  init=rng -> 2 .* rand(rng, 3) .- 1, bounds=((-1, 1), (-1, 1)));
-                             num_samples=4)
+                             n_samples=4)
     test_archive(() -> SpreadArchive(GridArchive(labelled; dims=(6, 6), phenotype=Int)), labelled; batchwise...)
 
     archive = SpreadArchive(GridArchive(prob; dims=(6, 6)))
@@ -227,7 +227,7 @@ end
 end
 
 @testset "MELS" begin
-    prob = SampledSpread(noisy; num_samples=4)
+    prob = SampledSpread(noisy; n_samples=4)
     alg = MELS(prob; dims=(5, 5), batch_size=16)
     @test alg.archive isa SpreadArchive{Vector{Float64},Float64,2,Nothing,<:GridArchive}
     result = solve(prob, alg; budget=4_000, rng=Xoshiro(1))
@@ -245,9 +245,9 @@ end
     @test MELS(prob; dims=(5, 5), phenotype=Int).archive isa SpreadArchive{Vector{Float64},Float64,2,Int}
 
     @test_throws "MELS needs a SampledSpread problem" MELS(noisy; dims=(5, 5))
-    @test_throws "MELS needs a SampledSpread problem" MELS(Sampled(noisy; num_samples=3); dims=(5, 5))
+    @test_throws "MELS needs a SampledSpread problem" MELS(Sampled(noisy; n_samples=3); dims=(5, 5))
     @test_throws "SampledSpread keeps the descriptors of every evaluation, which only a SpreadArchive takes, not a GridArchive" init(prob, MAPElites(prob; dims=(5, 5)); budget=1_000)
     @test_throws "a SpreadArchive needs every evaluation of a solution: wrap the problem as SampledSpread" init(noisy, MELS(prob; dims=(5, 5)); budget=1_000)
-    @test_throws "a SpreadArchive needs every evaluation of a solution" init(Sampled(noisy; num_samples=2), MELS(prob; dims=(5, 5)); budget=1_000)
+    @test_throws "a SpreadArchive needs every evaluation of a solution" init(Sampled(noisy; n_samples=2), MELS(prob; dims=(5, 5)); budget=1_000)
     @test_throws "a SpreadArchive needs a stochastic problem, but Rastrigin is deterministic" init(Rastrigin(2), MELS(SpreadArchive(GridArchive(Rastrigin(2); dims=(5, 5)))); budget=1_000)
 end

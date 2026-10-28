@@ -108,10 +108,10 @@ function check_float_fitness(fitness::Type, what)
     return nothing
 end
 
-# `num_emitters` emitters made by `make`, as the tuple that QDAlgorithm takes.
-function emitter_tuple(make, num_emitters::Integer)
-    num_emitters >= 1 || throw(ArgumentError("num_emitters must be at least 1, got $num_emitters"))
-    return Tuple(make() for _ in 1:num_emitters)
+# `n_emitters` emitters made by `make`, as the tuple that QDAlgorithm takes.
+function emitter_tuple(make, n_emitters::Integer)
+    n_emitters >= 1 || throw(ArgumentError("n_emitters must be at least 1, got $n_emitters"))
+    return Tuple(make() for _ in 1:n_emitters)
 end
 
 """
@@ -138,20 +138,20 @@ function MAPElites(archive::AbstractArchive; batch_size::Integer=64,
 end
 
 """
-    CMAME(prob; dims, sigma0, num_emitters=5, batch_size=<CMA-ES default>,
+    CMAME(prob; dims, sigma0, n_emitters=5, batch_size=<CMA-ES default>,
           ranker=TwoStageImprovementRanker(), selection=FilterSelection(),
           restart=NoImprovementRestart(), x0=nothing, lower=-Inf, upper=Inf,
           bounds=nothing, genotype=default_genotype(prob), fitness=Float64,
           outside=ClampOutside(), phenotype=Nothing, device=nothing) -> QDAlgorithm
 
 CMA-ME (Fontaine et al., 2020): a [`GridArchive`](@ref) with `dims` cells along each
-descriptor dimension, as for [`MAPElites`](@ref), and `num_emitters` independent
+descriptor dimension, as for [`MAPElites`](@ref), and `n_emitters` independent
 [`CMAEmitter`](@ref)s, each with its own search distribution. The emitters are the
 improvement emitter of the paper: candidates ranked by what the archive did with them,
 the ones the archive accepted recombined, and a restart from a random elite when a
 batch is rejected entirely. The paper runs 15 emitters of 36 candidates; the default is
 5 emitters with the batch size of CMA-ES, `4 + floor(3 log(dim))`, so pass
-`num_emitters=15, batch_size=36` for its settings.
+`n_emitters=15, batch_size=36` for its settings.
 
 `sigma0` is the initial step size of the search distributions and has no default,
 because it depends on the scale of the solutions. The solutions must be real vectors;
@@ -185,23 +185,23 @@ function CMAME(prob::AbstractQDProblem; dims::Tuple, sigma0::Real,
 end
 
 """
-    CMAME(archive::AbstractArchive; sigma0, dim, num_emitters=5, kwargs...) -> QDAlgorithm
+    CMAME(archive::AbstractArchive; sigma0, dim, n_emitters=5, kwargs...) -> QDAlgorithm
 
-CMA-ME over any archive, such as a [`CVTArchive`](@ref): `archive` with `num_emitters`
+CMA-ME over any archive, such as a [`CVTArchive`](@ref): `archive` with `n_emitters`
 [`CMAEmitter`](@ref)s for solutions of length `dim`. The keyword arguments are those of
-[`CMAEmitter`](@ref). For a [`DeviceCellArchive`](@ref) the emitters are the `num_emitters`
+[`CMAEmitter`](@ref). For a [`DeviceCellArchive`](@ref) the emitters are the `n_emitters`
 searches of one [`DeviceCMAEmitter`](@ref).
 """
-function CMAME(archive::AbstractArchive; sigma0::Real, dim::Integer, num_emitters::Integer=5, kwargs...)
-    return QDAlgorithm(archive, emitter_tuple(() -> CMAEmitter(dim; sigma0, kwargs...), num_emitters))
+function CMAME(archive::AbstractArchive; sigma0::Real, dim::Integer, n_emitters::Integer=5, kwargs...)
+    return QDAlgorithm(archive, emitter_tuple(() -> CMAEmitter(dim; sigma0, kwargs...), n_emitters))
 end
 
-function CMAME(archive::DeviceCellArchive; sigma0::Real, dim::Integer, num_emitters::Integer=5, kwargs...)
-    return QDAlgorithm(archive, (DeviceCMAEmitter(dim; num_emitters, sigma0, kwargs...),))
+function CMAME(archive::DeviceCellArchive; sigma0::Real, dim::Integer, n_emitters::Integer=5, kwargs...)
+    return QDAlgorithm(archive, (DeviceCMAEmitter(dim; n_emitters, sigma0, kwargs...),))
 end
 
 """
-    CMAMAE(prob; dims, sigma0, threshold_min, learning_rate=0.01, num_emitters=5,
+    CMAMAE(prob; dims, sigma0, threshold_min, learning_rate=0.01, n_emitters=5,
            batch_size=<CMA-ES default>, ranker=ImprovementRanker(),
            selection=MuSelection(), restart=ConvergenceRestart(), x0=nothing,
            lower=-Inf, upper=Inf, bounds=nothing, genotype=default_genotype(prob),
@@ -219,7 +219,7 @@ arguments are those of [`CMAME`](@ref), without `device`: the threshold archive 
 on the host.
 """
 function CMAMAE(prob::AbstractQDProblem; dims::Tuple, sigma0::Real, threshold_min::Real,
-                learning_rate::Real=0.01, num_emitters::Integer=5,
+                learning_rate::Real=0.01, n_emitters::Integer=5,
                 ranker::AbstractRanker=ImprovementRanker(),
                 selection::SelectionRule=MuSelection(),
                 restart::RestartRule=ConvergenceRestart(),
@@ -230,19 +230,19 @@ function CMAMAE(prob::AbstractQDProblem; dims::Tuple, sigma0::Real, threshold_mi
     check_float_fitness(fitness, "ThresholdArchive")
     grid = grid_archive(prob; dims, bounds, genotype, fitness, outside, phenotype)
     archive = ThresholdArchive(grid; learning_rate, threshold_min)
-    return CMAME(archive; sigma0, dim=solution_dim(prob), num_emitters, ranker, selection, restart, kwargs...)
+    return CMAME(archive; sigma0, dim=solution_dim(prob), n_emitters, ranker, selection, restart, kwargs...)
 end
 
 """
     DDS(prob; dims, sigma0, bandwidth, buffer_capacity=10_000, rng=Random.default_rng(),
-        num_emitters=15, batch_size=36, ranker=ImprovementRanker(), selection=MuSelection(),
+        n_emitters=15, batch_size=36, ranker=ImprovementRanker(), selection=MuSelection(),
         restart=ConvergenceRestart(), x0=nothing, lower=-Inf, upper=Inf, bounds=nothing,
         genotype=default_genotype(prob), fitness=Float64, outside=ClampOutside(),
         phenotype=Nothing) -> QDAlgorithm
 
 Density Descent Search with a kernel density estimate (DDS-KDE; Lee et al., 2024): a
 [`DensityArchive`](@ref) around a [`GridArchive`](@ref) with `dims` cells, and
-`num_emitters` [`CMAEmitter`](@ref)s that rank their candidates by the density of the
+`n_emitters` [`CMAEmitter`](@ref)s that rank their candidates by the density of the
 descriptors found so far, lowest first, recombine the best half and restart on
 convergence, the settings of the paper. It searches for diversity alone: the fitness only
 decides which solution the grid keeps in a cell. `bandwidth`, `buffer_capacity` and
@@ -271,7 +271,7 @@ coverage(result.archive)
 """
 function DDS(prob::AbstractQDProblem; dims::Tuple, sigma0::Real, bandwidth::Real,
              buffer_capacity::Integer=10_000, rng::AbstractRNG=Random.default_rng(),
-             num_emitters::Integer=15, batch_size::Integer=36,
+             n_emitters::Integer=15, batch_size::Integer=36,
              ranker::AbstractRanker=ImprovementRanker(),
              selection::SelectionRule=MuSelection(),
              restart::RestartRule=ConvergenceRestart(),
@@ -282,12 +282,12 @@ function DDS(prob::AbstractQDProblem; dims::Tuple, sigma0::Real, bandwidth::Real
     check_float_fitness(fitness, "DensityArchive")
     grid = grid_archive(prob; dims, bounds, genotype, fitness, outside, phenotype)
     archive = DensityArchive(grid; bandwidth, buffer_capacity, rng)
-    return CMAME(archive; sigma0, dim=solution_dim(prob), num_emitters, batch_size, ranker, selection,
+    return CMAME(archive; sigma0, dim=solution_dim(prob), n_emitters, batch_size, ranker, selection,
                  restart, kwargs...)
 end
 
 """
-    CMAMEGA(prob; dims, sigma0, optimizer=AdamAscent(), num_emitters=1,
+    CMAMEGA(prob; dims, sigma0, optimizer=AdamAscent(), n_emitters=1,
             batch_size=<CMA-ES default>, ranker=TwoStageImprovementRanker(),
             selection=FilterSelection(), restart=NoImprovementRestart(), x0=nothing,
             normalize=true, bounds=nothing, genotype=default_genotype(prob), fitness=Float64,
@@ -295,7 +295,7 @@ end
 
 CMA-MEGA (Fontaine and Nikolaidis, 2021, "Differentiable Quality Diversity"): a
 [`GridArchive`](@ref) with `dims` cells along each descriptor dimension, as for
-[`MAPElites`](@ref), and `num_emitters` [`GradientArborescenceEmitter`](@ref)s, which step
+[`MAPElites`](@ref), and `n_emitters` [`GradientArborescenceEmitter`](@ref)s, which step
 along the gradients of the fitness and the descriptor. The problem must provide them; see
 [`evaluate_gradient`](@ref QualityDiversity.evaluate_gradient). The ranking, selection
 and restart rules and the optimizer are those of CMA-MEGA (Adam) in the paper, which runs
@@ -325,16 +325,16 @@ function CMAMEGA(prob::AbstractQDProblem; dims::Tuple, sigma0::Real,
 end
 
 """
-    CMAMEGA(archive::AbstractArchive; sigma0, dim, num_emitters=1, kwargs...) -> QDAlgorithm
+    CMAMEGA(archive::AbstractArchive; sigma0, dim, n_emitters=1, kwargs...) -> QDAlgorithm
 
 CMA-MEGA over any archive with `SVector` descriptors, such as a [`CVTArchive`](@ref):
-`archive` with `num_emitters` [`GradientArborescenceEmitter`](@ref)s for solutions of length
+`archive` with `n_emitters` [`GradientArborescenceEmitter`](@ref)s for solutions of length
 `dim`. The keyword arguments are those of [`GradientArborescenceEmitter`](@ref).
 """
 function CMAMEGA(archive::AbstractArchive{G,F,SVector{N,Float64}}; sigma0::Real, dim::Integer,
-                 num_emitters::Integer=1, kwargs...) where {G,F,N}
-    make() = GradientArborescenceEmitter(dim; num_descriptors=N, sigma0, kwargs...)
-    return QDAlgorithm(archive, emitter_tuple(make, num_emitters))
+                 n_emitters::Integer=1, kwargs...) where {G,F,N}
+    make() = GradientArborescenceEmitter(dim; n_descriptors=N, sigma0, kwargs...)
+    return QDAlgorithm(archive, emitter_tuple(make, n_emitters))
 end
 
 function CMAMEGA(archive::AbstractArchive; kwargs...)
@@ -343,7 +343,7 @@ end
 
 """
     CMAMAEGA(prob; dims, sigma0, threshold_min, learning_rate=0.01, optimizer=AdamAscent(),
-             num_emitters=1, batch_size=<CMA-ES default>, ranker=ImprovementRanker(),
+             n_emitters=1, batch_size=<CMA-ES default>, ranker=ImprovementRanker(),
              selection=MuSelection(), restart=ConvergenceRestart(), x0=nothing,
              normalize=true, bounds=nothing, genotype=default_genotype(prob), fitness=Float64,
              outside=ClampOutside(), phenotype=Nothing) -> QDAlgorithm
@@ -476,7 +476,7 @@ distance between the descriptors of its evaluations. The archive is a
 descriptor dimension, and one [`VariationEmitter`](@ref) applies `variation` to
 `batch_size` children per round.
 
-`prob` is a [`SampledSpread`](@ref) problem, which evaluates every solution `num_samples`
+`prob` is a [`SampledSpread`](@ref) problem, which evaluates every solution `n_samples`
 times; pass the same problem to `solve`. The other arguments are those of
 [`MAPElites`](@ref).
 
@@ -485,7 +485,7 @@ times; pass the same problem to `solve`. The other arguments are those of
 ```julia
 noisy = StochasticQDProblem((rng, x) -> (-sum(abs2, x), (x[1], x[2]) .+ 0.05 .* randn(rng, 2));
                             init=rng -> randn(rng, 5), bounds=((-3, 3), (-3, 3)))
-prob = SampledSpread(noisy; num_samples=10)
+prob = SampledSpread(noisy; n_samples=10)
 result = solve(prob, MELS(prob; dims=(20, 20)); budget=200_000, rng=Xoshiro(1))
 ```
 """
@@ -499,7 +499,7 @@ function MELS(prob::SampledSpread; dims::Tuple, batch_size::Integer=64,
 end
 
 function MELS(prob::AbstractQDProblem; kwargs...)
-    throw(ArgumentError("MELS needs a SampledSpread problem, which evaluates every solution several times: wrap the stochastic problem as SampledSpread(prob; num_samples)"))
+    throw(ArgumentError("MELS needs a SampledSpread problem, which evaluates every solution several times: wrap the stochastic problem as SampledSpread(prob; n_samples)"))
 end
 
 """

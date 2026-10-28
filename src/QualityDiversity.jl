@@ -93,7 +93,7 @@ export init, step!, solve!, solve
 export qd_score, coverage, max_fitness, mean_fitness, cqd_score, hypervolume, global_hypervolume
 
 @compat public Benchmarks
-@compat public AddStatus, AddResult, QDState, QDResult, CQDScore, num_solutions, max_hypervolume, max_scores
+@compat public AddStatus, AddResult, QDState, QDResult, CQDScore, n_solutions, max_hypervolume, max_scores
 @compat public Expectation, Average, Median
 @compat public CentroidSeeding, KMeansPlusPlus, GreedyKMeansPlusPlus
 @compat public OutsidePolicy, DuplicatePolicy, RejectDuplicates, KeepDuplicates, FullFrontPolicy, RejectNewcomer, ReplaceCrowded

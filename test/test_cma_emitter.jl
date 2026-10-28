@@ -215,7 +215,7 @@ end
     @test bounded.es.mean == [1.0, 0.0, 0.5, 1.0]
     @test all(x -> all(0 .<= x .<= 1), xs)
     @test maximum(x -> maximum(abs, x .- [1.0, 0.0, 0.5, 1.0]), xs) < 0.5
-    device = QD.DeviceCMAEmitter(4; num_emitters=2, sigma0=0.1, lower=0.0, upper=1.0)
+    device = QD.DeviceCMAEmitter(4; n_emitters=2, sigma0=0.1, lower=0.0, upper=1.0)
     @test QD.start_means(Xoshiro(1), device, outside) == [[1.0, 0.0, 0.5, 1.0], [1.0, 0.0, 0.5, 1.0]]
 end
 
@@ -235,13 +235,13 @@ end
     @test all(e -> e isa CMAEmitter{QD.TwoStageImprovementRanker,QD.FilterSelection,QD.NoImprovementRestart}, alg.emitters)
     @test all(e -> e.es.dim == 10 && e.es.sigma0 == 0.5, alg.emitters)
     @test alg.emitters[1] !== alg.emitters[2]
-    @test length(CMAME(prob; dims=(8, 8), sigma0=0.5, num_emitters=2, batch_size=11).emitters) == 2
+    @test length(CMAME(prob; dims=(8, 8), sigma0=0.5, n_emitters=2, batch_size=11).emitters) == 2
     @test QD.batch_size(CMAME(prob; dims=(8, 8), sigma0=0.5, batch_size=11).emitters[1]) == 11
     @test CMAME(prob; dims=(8, 8), sigma0=0.5, selection=QD.MuSelection()).emitters[1] isa CMAEmitter{<:Any,QD.MuSelection}
     @test CMAME(prob; dims=(8, 8), sigma0=0.5, genotype=Vector{Float32}, fitness=Float32).archive isa
           GridArchive{Vector{Float32},Float32}
     @test_throws UndefKeywordError CMAME(prob; dims=(8, 8))
-    @test_throws "num_emitters must be at least 1, got 0" CMAME(prob; dims=(8, 8), sigma0=0.5, num_emitters=0)
+    @test_throws "n_emitters must be at least 1, got 0" CMAME(prob; dims=(8, 8), sigma0=0.5, n_emitters=0)
     @test_throws "dims" CMAME(Rastrigin(4); sigma0=1)
 
     mae = CMAMAE(prob; dims=(8, 8), sigma0=0.5, threshold_min=0.0, learning_rate=0.1)
@@ -252,7 +252,7 @@ end
 
     # any archive: the dimension is given
     cvt = CVTArchive(prob; cells=40, samples=2_000, rng=Xoshiro(1))
-    over_cvt = CMAME(cvt; sigma0=0.5, dim=10, num_emitters=2)
+    over_cvt = CMAME(cvt; sigma0=0.5, dim=10, n_emitters=2)
     @test over_cvt.archive === cvt && length(over_cvt.emitters) == 2
     r = solve(prob, over_cvt; budget=1_500, rng=Xoshiro(1))
     @test r.archive isa CVTArchive && length(r.archive) > 5
@@ -357,7 +357,7 @@ end
     QD.ask(Xoshiro(2), a, archive)
     @test a.ranker.direction != first_direction              # a restart draws a new direction
     # the algorithm constructors give every emitter its own ranker
-    alg = CMAME(Sphere(4); dims=(4, 4), sigma0=1.0, num_emitters=3, ranker=QD.RandomDirectionRanker())
+    alg = CMAME(Sphere(4); dims=(4, 4), sigma0=1.0, n_emitters=3, ranker=QD.RandomDirectionRanker())
     @test length(unique(objectid(e.ranker) for e in alg.emitters)) == 3
 end
 

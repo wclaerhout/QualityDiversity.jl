@@ -40,7 +40,7 @@ const prob = QDProblem(rastrigin; init=rng -> (2 .* rand(rng, Float32, DIM) .- 1
                        bounds=((-5.12, 5.12), (-5.12, 5.12)))
 
 make_algorithm(searches, device) =
-    CMAME(prob; dims=DIMS, sigma0=1.0, num_emitters=searches, genotype=Vector{Float32}, fitness=Float32,
+    CMAME(prob; dims=DIMS, sigma0=1.0, n_emitters=searches, genotype=Vector{Float32}, fitness=Float32,
           (device === nothing ? (;) : (; device))...)
 
 println("Julia $VERSION, $(Threads.nthreads()) threads, CUDA ", CUDA.name(CUDA.device()), ", $REPEATS runs per row")

@@ -27,14 +27,14 @@ chooses all of them again.
 struct ReselectAll <: ReselectRule end
 
 """
-    BanditScheduler(pool; num_active, zeta=0.05, window=50, reselect=ReselectTerminated())
+    BanditScheduler(pool; n_active, zeta=0.05, window=50, reselect=ReselectTerminated())
 
-An emitter that holds a pool of emitters and runs `num_active` of them each round,
+An emitter that holds a pool of emitters and runs `n_active` of them each round,
 chosen by a multi-armed bandit (Cully, 2021, "Multi-Emitter MAP-Elites"; pyribs
 `BanditScheduler`). Emitters that keep adding solutions to the archive run more often.
 
 `pool` is a tuple (or a vector) of emitters for the same genotype type. The first round
-runs the first `num_active` of them. `ask` returns the batches of the active emitters one
+runs the first `n_active` of them. `ask` returns the batches of the active emitters one
 after the other, in the order of the pool, and [`batch_size`](@ref
 QualityDiversity.batch_size) is the sum of their batch sizes, so emitters of different
 batch sizes can share a pool. `tell!` gives each active emitter its part of the batch and
@@ -65,13 +65,13 @@ archive = GridArchive(prob; dims=(20, 20))
 pool = (VariationEmitter(GaussianMutation(0.1); batch_size=36),
         VariationEmitter(IsoLineVariation(0.01, 0.1); batch_size=36),
         (CMAEmitter(10; sigma0=0.5, batch_size=36) for _ in 1:4)...)
-alg = QDAlgorithm(archive, (BanditScheduler(pool; num_active=2),))
+alg = QDAlgorithm(archive, (BanditScheduler(pool; n_active=2),))
 result = solve(prob, alg; budget=50_000, rng=Xoshiro(1))
 ```
 """
 mutable struct BanditScheduler{E<:Tuple,R<:ReselectRule} <: AbstractEmitter
     const pool::E
-    const num_active::Int
+    const n_active::Int
     const zeta::Float64
     const reselect::R
     const active::Vector{Bool}
@@ -90,7 +90,7 @@ mutable struct BanditScheduler{E<:Tuple,R<:ReselectRule} <: AbstractEmitter
     asked::Bool
 end
 
-function BanditScheduler(pool::Tuple; num_active::Integer, zeta::Real=0.05, window::Integer=50,
+function BanditScheduler(pool::Tuple; n_active::Integer, zeta::Real=0.05, window::Integer=50,
                          reselect::ReselectRule=ReselectTerminated())
     P = length(pool)
     P >= 1 || throw(ArgumentError("the pool must hold at least one emitter"))
@@ -104,14 +104,14 @@ function BanditScheduler(pool::Tuple; num_active::Integer, zeta::Real=0.05, wind
                 throw(ArgumentError("pool[$j] and pool[$i] are the same $(nameof(typeof(e))); every emitter with state must be a separate instance, e.g. built with a comprehension"))
         end
     end
-    1 <= num_active <= P ||
-        throw(ArgumentError("num_active must be between 1 and the size of the pool ($P), got $num_active"))
+    1 <= n_active <= P ||
+        throw(ArgumentError("n_active must be between 1 and the size of the pool ($P), got $n_active"))
     (isfinite(zeta) && zeta >= 0) ||
         throw(ArgumentError("zeta must be finite and at least 0, got $zeta"))
     window >= 1 || throw(ArgumentError("window must be at least 1, got $window"))
-    active = [i <= num_active for i in 1:P]
+    active = [i <= n_active for i in 1:P]
     seen = Int[something(restarts(e), 0) for e in pool]
-    return BanditScheduler{typeof(pool),typeof(reselect)}(pool, Int(num_active), Float64(zeta), reselect,
+    return BanditScheduler{typeof(pool),typeof(reselect)}(pool, Int(n_active), Float64(zeta), reselect,
                                                           active, zeros(Int, window, P), zeros(Int, window, P),
                                                           zeros(Int, P), zeros(Int, P), seen, 0, false)
 end
@@ -226,7 +226,7 @@ end
 function reselect!(scheduler::BanditScheduler)
     release!(scheduler, scheduler.pool, 1)
     total = sum(scheduler.selections)
-    for _ in count(scheduler.active)+1:scheduler.num_active
+    for _ in count(scheduler.active)+1:scheduler.n_active
         best = argmax(i -> ucb1(scheduler.successes[i], scheduler.selections[i], total, scheduler.zeta),
                       findall(!, scheduler.active))
         scheduler.active[best] = true

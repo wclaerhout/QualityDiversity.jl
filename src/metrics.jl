@@ -62,19 +62,19 @@ end
 
 The result of [`cqd_score`](@ref): `score`, the continuous QD score; `penalties`, the
 penalty weights; `per_penalty`, the mean of `ω` over the targets for each weight, in the
-order of `penalties`; and `num_targets`. `score` is `num_targets * sum(per_penalty)`.
+order of `penalties`; and `n_targets`. `score` is `n_targets * sum(per_penalty)`.
 With Makie loaded, `lines(result)` plots `per_penalty` against `penalties`.
 """
 struct CQDScore
     score::Float64
     penalties::Vector{Float64}
     per_penalty::Vector{Float64}
-    num_targets::Int
+    n_targets::Int
 end
 
 """
     cqd_score(archive; targets, fitness_range, penalties=10, distance_max) -> CQDScore
-    cqd_score(rng::AbstractRNG, archive; num_targets, fitness_range, penalties=10,
+    cqd_score(rng::AbstractRNG, archive; n_targets, fitness_range, penalties=10,
               distance_max, bounds=descriptor_bounds(archive)) -> CQDScore
 
 The continuous quality-diversity score of Kent, Branke, Gaier and Mouret (2022), "A
@@ -90,7 +90,7 @@ recommended `ω` over every target and every weight. As in the paper and in pyri
 fitness is divided by the range, not shifted by `f_min`.
 
 - `targets`: descriptor points, each with the archive's number of dimensions. The second
-  form draws `num_targets` of them uniformly within `bounds` with `rng`; the paper draws
+  form draws `n_targets` of them uniformly within `bounds` with `rng`; the paper draws
   new targets for every run.
 - `fitness_range = (f_min, f_max)`: the bounds of the fitness, from the problem or from
   all the runs being compared; it has no default.
@@ -158,16 +158,16 @@ function cqd_score(archive::AbstractArchive; kwargs...)
     throw(ArgumentError("cqd_score measures distances between descriptors, which the descriptors of a $(nameof(typeof(archive))) do not have"))
 end
 
-function cqd_score(rng::AbstractRNG, archive::AbstractArchive{G,F,SVector{N,Float64}}; num_targets::Integer,
+function cqd_score(rng::AbstractRNG, archive::AbstractArchive{G,F,SVector{N,Float64}}; n_targets::Integer,
                    bounds::Union{Tuple,Nothing}=nothing, kwargs...) where {G,F,N}
-    num_targets >= 1 || throw(ArgumentError("num_targets must be at least 1, got $num_targets"))
+    n_targets >= 1 || throw(ArgumentError("n_targets must be at least 1, got $n_targets"))
     box = bounds === nothing ? archive_bounds(archive, "pass bounds") : bounds
     length(box) == N || throw(ArgumentError("bounds has $(length(box)) entries but the archive has $N descriptor dimensions"))
     lower = SVector{N,Float64}(map(b -> Float64(b[1]), box))
     upper = SVector{N,Float64}(map(b -> Float64(b[2]), box))
     all(i -> isfinite(lower[i]) && isfinite(upper[i]) && lower[i] <= upper[i], 1:N) ||
         throw(ArgumentError("bounds must be finite (lo, hi) pairs with lo <= hi, got $box"))
-    targets = [lower .+ rand(rng, SVector{N,Float64}) .* (upper .- lower) for _ in 1:num_targets]
+    targets = [lower .+ rand(rng, SVector{N,Float64}) .* (upper .- lower) for _ in 1:n_targets]
     return cqd_score(archive; targets, kwargs...)
 end
 

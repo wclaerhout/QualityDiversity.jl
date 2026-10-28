@@ -86,7 +86,7 @@ mutable struct UnstructuredArchive{G,F<:Real,N,P} <: AbstractArchive{G,F,SVector
     tree_size::Int
     const pending::Vector{Bool}
     const pending_slots::Vector{Int}
-    num_pending::Int
+    n_pending::Int
 
     function UnstructuredArchive{G,F,N,P}(capacity, threshold) where {G,F<:Real,N,P}
         N >= 1 || throw(ArgumentError("ndims must be at least 1, got $N"))
@@ -163,7 +163,7 @@ function nearest_stored(archive::UnstructuredArchive, point)
         return best, best_distance
     end
     best, best_distance = search(archive.tree, point, 1, archive.tree_size, 0, Inf, Flagged(archive.pending))
-    for p in 1:archive.num_pending
+    for p in 1:archive.n_pending
         best, best_distance = nearer(archive, point, archive.pending_slots[p], best, best_distance)
     end
     return best, best_distance
@@ -193,7 +193,7 @@ tree_threshold(::UnstructuredArchive{G,F,N}) where {G,F,N} = N >= 15 ? typemax(I
 function refresh_tree!(archive::UnstructuredArchive)
     n = archive.n
     n >= tree_threshold(archive) || return nothing
-    archive.tree_size > 0 && archive.num_pending <= 64 + 8 * isqrt(n) && return nothing
+    archive.tree_size > 0 && archive.n_pending <= 64 + 8 * isqrt(n) && return nothing
     tree = archive.tree
     for i in 1:n
         tree.points[i] = archive.descriptors[i]
@@ -206,10 +206,10 @@ function refresh_tree!(archive::UnstructuredArchive)
 end
 
 function clear_pending!(archive::UnstructuredArchive)
-    for p in 1:archive.num_pending
+    for p in 1:archive.n_pending
         archive.pending[archive.pending_slots[p]] = false
     end
-    archive.num_pending = 0
+    archive.n_pending = 0
     return nothing
 end
 
@@ -321,8 +321,8 @@ function _store!(archive::UnstructuredArchive, i, x, fitness, descriptor, phenot
     store_phenotype!(archive.phenotypes, i, phenotype)
     if archive.tree_size > 0 && !archive.pending[i]
         archive.pending[i] = true
-        archive.num_pending += 1
-        archive.pending_slots[archive.num_pending] = i
+        archive.n_pending += 1
+        archive.pending_slots[archive.n_pending] = i
     end
     return nothing
 end

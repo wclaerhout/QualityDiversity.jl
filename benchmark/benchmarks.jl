@@ -29,10 +29,10 @@ end
 SUITE["problem"]["evaluate"] = @benchmarkable QD.evaluate($prob, $x)
 const noisy = StochasticQDProblem((rng, x) -> (-sum(abs2, x) + randn(rng), (x[1], x[2]));
                                   init=rng -> randn(rng, 20), bounds=((-3, 3), (-3, 3)))
-const sampled = Sampled(noisy; num_samples=10)
+const sampled = Sampled(noisy; n_samples=10)
 SUITE["problem"]["StochasticQDProblem/evaluate"] = @benchmarkable QD.evaluate($rng, $noisy, $x)
 SUITE["problem"]["Sampled/evaluate"] = @benchmarkable QD.evaluate($rng, $sampled, $x)
-const spread_problem = SampledSpread(noisy; num_samples=10)
+const spread_problem = SampledSpread(noisy; n_samples=10)
 SUITE["problem"]["SampledSpread/evaluate"] = @benchmarkable QD.evaluate($rng, $spread_problem, $x)
 for n in (36, 100, 1000)
     xs = [QD.random_solution(rng, prob) for _ in 1:n]
@@ -210,7 +210,7 @@ SUITE["algorithm"]["BanditScheduler/step!"] = let
     pool = ((VariationEmitter(GaussianMutation(0.5); batch_size=36) for _ in 1:4)...,
             (VariationEmitter(IsoLineVariation(0.01, 0.1); batch_size=36) for _ in 1:4)...,
             (CMAEmitter(20; sigma0=0.5, batch_size=36) for _ in 1:4)...)
-    alg = QDAlgorithm(GridArchive(sphere; dims=(100, 100)), (BanditScheduler(pool; num_active=4),))
+    alg = QDAlgorithm(GridArchive(sphere; dims=(100, 100)), (BanditScheduler(pool; n_active=4),))
     state = init(sphere, alg; budget=10^9, rng=Xoshiro(1))
     for _ in 1:50
         step!(state)

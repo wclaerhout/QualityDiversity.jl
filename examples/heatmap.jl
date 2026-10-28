@@ -91,7 +91,7 @@ fitness_range = (-QualityDiversity.fitness_offset(prob), 0.0)    # the range of 
 fig = Figure(size=(500, 350))
 ax = Axis(fig[1, 1]; xlabel="penalty weight θ", ylabel="mean ω over the targets")
 for (label, result) in ("GridArchive" => grid, "CVTArchive" => cvt)
-    score = cqd_score(Xoshiro(2), result.archive; num_targets=200, fitness_range)
+    score = cqd_score(Xoshiro(2), result.archive; n_targets=200, fitness_range)
     lines!(ax, score; label)
 end
 axislegend(ax)

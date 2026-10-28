@@ -50,13 +50,13 @@ nothing #hide
 
 # ## Reading the results
 #
-# `length` counts the occupied cells and `QualityDiversity.num_solutions` the solutions
+# `length` counts the occupied cells and `QualityDiversity.n_solutions` the solutions
 # in all fronts. The metrics of a multi-objective run differ from those of MAP-Elites:
 # `qd_score` is the MOQD score, the sum of the hypervolumes of the fronts of all
 # cells, and `global_hypervolume` is that of the front of all solutions together.
 
 final = result.history[end]
-(occupied_cells=length(archive), solutions=final.num_solutions, moqd_score=final.qd_score,
+(occupied_cells=length(archive), solutions=final.n_solutions, moqd_score=final.qd_score,
  global_hypervolume=global_hypervolume(archive))
 
 # `QualityDiversity.elites` iterates over every solution of every front, with its

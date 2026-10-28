@@ -84,7 +84,7 @@ Main.QualityDiversityTablesExt
 
 ```@docs
 ParetoGridArchive
-QualityDiversity.num_solutions
+QualityDiversity.n_solutions
 QualityDiversity.DuplicatePolicy
 QualityDiversity.RejectDuplicates
 QualityDiversity.KeepDuplicates

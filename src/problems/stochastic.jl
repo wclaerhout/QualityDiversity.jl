@@ -85,16 +85,16 @@ function expectation(::Median, values)
 end
 
 """
-    Sampled(prob; num_samples, expectation=Average())
+    Sampled(prob; n_samples, expectation=Average())
 
-Score every solution of the stochastic problem `prob` with `num_samples` evaluations and
+Score every solution of the stochastic problem `prob` with `n_samples` evaluations and
 return the [`Expectation`](@ref) of their fitness and, for every dimension, of their
 descriptor. An archive then holds the averages and not the single lucky evaluation that a
 noisy problem can give a poor solution.
 
 `Sampled` is itself a stochastic problem; the evaluations of one solution run one after the
 other with the generator of that solution, so the results are reproducible from the seed of
-the run. Every evaluation counts against the budget of a run, so `num_samples` times fewer
+the run. Every evaluation counts against the budget of a run, so `n_samples` times fewer
 solutions are scored for the same budget; see
 [`evaluations_per_solution`](@ref QualityDiversity.evaluations_per_solution). The fitness
 must be a real number and the descriptor a vector of real numbers. The descriptor bounds
@@ -114,7 +114,7 @@ julia> using QualityDiversity, Random
 julia> noisy = StochasticQDProblem((rng, x) -> (-x[1]^2 + randn(rng), (x[1], x[2]));
                                    init = rng -> randn(rng, 2), bounds = ((-3, 3), (-3, 3)));
 
-julia> prob = Sampled(noisy; num_samples=100);
+julia> prob = Sampled(noisy; n_samples=100);
 
 julia> ev = QualityDiversity.evaluate(Xoshiro(1), prob, [1.0, 0.5]);
 
@@ -127,19 +127,19 @@ julia> QualityDiversity.evaluations_per_solution(prob)
 """
 struct Sampled{P<:AbstractStochasticQDProblem,E<:Expectation} <: AbstractStochasticQDProblem
     problem::P
-    num_samples::Int
+    n_samples::Int
     expectation::E
 
-    function Sampled{P,E}(problem::P, num_samples::Integer, expectation::E) where {P,E}
-        num_samples >= 1 ||
-            throw(ArgumentError("num_samples must be at least 1, got $num_samples"))
-        return new{P,E}(problem, num_samples, expectation)
+    function Sampled{P,E}(problem::P, n_samples::Integer, expectation::E) where {P,E}
+        n_samples >= 1 ||
+            throw(ArgumentError("n_samples must be at least 1, got $n_samples"))
+        return new{P,E}(problem, n_samples, expectation)
     end
 end
 
-function Sampled(problem::AbstractStochasticQDProblem; num_samples::Integer,
+function Sampled(problem::AbstractStochasticQDProblem; n_samples::Integer,
                  expectation::Expectation=Average())
-    return Sampled{typeof(problem),typeof(expectation)}(problem, num_samples, expectation)
+    return Sampled{typeof(problem),typeof(expectation)}(problem, n_samples, expectation)
 end
 
 function Sampled(problem::AbstractQDProblem; kwargs...)
@@ -153,7 +153,7 @@ function evaluate(rng::AbstractRNG, prob::Sampled, x)
                       most_frequent(phenotypes))
 end
 
-# The fitness values, descriptors and phenotypes of `prob.num_samples` evaluations of `x`
+# The fitness values, descriptors and phenotypes of `prob.n_samples` evaluations of `x`
 # by `prob.problem`, one after the other with `rng`.
 function sample_evaluations(rng::AbstractRNG, prob, x)
     first = evaluate(rng, prob.problem, x)
@@ -162,7 +162,7 @@ function sample_evaluations(rng::AbstractRNG, prob, x)
         throw(ArgumentError("$name needs a real fitness, got a $(typeof(first.fitness))"))
     first.descriptor isa SVector{<:Any,<:Real} ||
         throw(ArgumentError("$name needs a descriptor that is an SVector of real numbers, got a $(typeof(first.descriptor))"))
-    n = prob.num_samples
+    n = prob.n_samples
     # Floating-point containers: the samples of one solution can mix integers and floats.
     fitness = Vector{float(typeof(first.fitness))}(undef, n)
     descriptors = Vector{float_svector(first.descriptor)}(undef, n)
@@ -221,7 +221,7 @@ descriptor_bounds(prob::Sampled) = descriptor_bounds(prob.problem)
 fitness_offset(prob::Sampled) = fitness_offset(prob.problem)
 
 evaluations_per_solution(prob::Sampled) =
-    prob.num_samples * evaluations_per_solution(prob.problem)
+    prob.n_samples * evaluations_per_solution(prob.problem)
 
 """
     DescriptorSamples{N}(samples::Vector{SVector{N,Float64}})
@@ -240,9 +240,9 @@ Base.getindex(d::DescriptorSamples, i::Int) = d.samples[i]
 Base.IndexStyle(::Type{<:DescriptorSamples}) = IndexLinear()
 
 """
-    SampledSpread(prob; num_samples, expectation=Average())
+    SampledSpread(prob; n_samples, expectation=Average())
 
-Score every solution of the stochastic problem `prob` with `num_samples` evaluations, as
+Score every solution of the stochastic problem `prob` with `n_samples` evaluations, as
 [`Sampled`](@ref) does, but keep every descriptor: the evaluation has the
 [`Expectation`](@ref) of the fitness, the descriptors of all the evaluations as a
 [`DescriptorSamples`](@ref), and the phenotype that occurs most often. A
@@ -262,7 +262,7 @@ julia> using QualityDiversity, Random
 julia> noisy = StochasticQDProblem((rng, x) -> (-x[1]^2 + randn(rng), (x[1], x[2] + 0.1 * randn(rng)));
                                    init = rng -> randn(rng, 2), bounds = ((-3, 3), (-3, 3)));
 
-julia> ev = QualityDiversity.evaluate(Xoshiro(1), SampledSpread(noisy; num_samples=5), [1.0, 0.5]);
+julia> ev = QualityDiversity.evaluate(Xoshiro(1), SampledSpread(noisy; n_samples=5), [1.0, 0.5]);
 
 julia> length(ev.descriptor), ev.descriptor[1][1]
 (5, 1.0)
@@ -270,19 +270,19 @@ julia> length(ev.descriptor), ev.descriptor[1][1]
 """
 struct SampledSpread{P<:AbstractStochasticQDProblem,E<:Expectation} <: AbstractStochasticQDProblem
     problem::P
-    num_samples::Int
+    n_samples::Int
     expectation::E
 
-    function SampledSpread{P,E}(problem::P, num_samples::Integer, expectation::E) where {P,E}
-        num_samples >= 1 ||
-            throw(ArgumentError("num_samples must be at least 1, got $num_samples"))
-        return new{P,E}(problem, num_samples, expectation)
+    function SampledSpread{P,E}(problem::P, n_samples::Integer, expectation::E) where {P,E}
+        n_samples >= 1 ||
+            throw(ArgumentError("n_samples must be at least 1, got $n_samples"))
+        return new{P,E}(problem, n_samples, expectation)
     end
 end
 
-function SampledSpread(problem::AbstractStochasticQDProblem; num_samples::Integer,
+function SampledSpread(problem::AbstractStochasticQDProblem; n_samples::Integer,
                        expectation::Expectation=Average())
-    return SampledSpread{typeof(problem),typeof(expectation)}(problem, num_samples, expectation)
+    return SampledSpread{typeof(problem),typeof(expectation)}(problem, n_samples, expectation)
 end
 
 function SampledSpread(problem::AbstractQDProblem; kwargs...)
@@ -306,4 +306,4 @@ descriptor_bounds(prob::SampledSpread) = descriptor_bounds(prob.problem)
 fitness_offset(prob::SampledSpread) = fitness_offset(prob.problem)
 
 evaluations_per_solution(prob::SampledSpread) =
-    prob.num_samples * evaluations_per_solution(prob.problem)
+    prob.n_samples * evaluations_per_solution(prob.problem)

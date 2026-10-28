@@ -68,8 +68,8 @@ end
     noisy = StochasticQDProblem((rng, x) -> (-sum(abs2, x) + randn(rng), (clamp(x[1], -1, 1), clamp(x[2], -1, 1)));
                                 init=rng -> 2 .* rand(rng, 3) .- 1, bounds=((-1, 1), (-1, 1)))
     test_problem(noisy)
-    test_problem(Sampled(noisy; num_samples=3))
-    test_problem(Sampled(noisy; num_samples=4, expectation=QD.Median()))
+    test_problem(Sampled(noisy; n_samples=3))
+    test_problem(Sampled(noisy; n_samples=4, expectation=QD.Median()))
     test_problem(StochasticQDProblem((rng, x) -> (randn(rng), (rand(rng, 1:3), :ring));
                                      init=rng -> randn(rng, 2), categories=(1:3, [:chain, :ring])))
     test_archive(() -> CategoricalArchive(labelled), labelled; sequential_batch=false)
@@ -215,10 +215,10 @@ end
     # bandit schedulers, with emitters of different batch sizes in one pool
     pool() = (VariationEmitter(GaussianMutation(0.2); batch_size=16), VariationEmitter(UniformCrossover(); batch_size=5),
               CMAEmitter(4; sigma0=1.0), CMAEmitter(4; sigma0=1.0, batch_size=9))
-    for num_active in 1:4, reselect in (QD.ReselectTerminated(), QD.ReselectAll())
-        test_emitter(BanditScheduler(pool(); num_active, reselect), filled(), prob)
+    for n_active in 1:4, reselect in (QD.ReselectTerminated(), QD.ReselectAll())
+        test_emitter(BanditScheduler(pool(); n_active, reselect), filled(), prob)
     end
-    test_emitter(BanditScheduler((CMAEmitter(4; sigma0=1.0),); num_active=1, window=1), filled(), prob)
+    test_emitter(BanditScheduler((CMAEmitter(4; sigma0=1.0),); n_active=1, window=1), filled(), prob)
 end
 
 struct BadProblem <: AbstractQDProblem end

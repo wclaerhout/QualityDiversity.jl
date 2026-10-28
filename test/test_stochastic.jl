@@ -65,10 +65,10 @@ end
 @testset "Sampled" begin
     prob = noisy_problem()
     x = [1.0, 0.5, 0.0, 0.0]
-    sampled = Sampled(prob; num_samples=7)
+    sampled = Sampled(prob; n_samples=7)
     @test sampled isa AbstractStochasticQDProblem && sampled.expectation isa QD.Average
     @test QD.evaluations_per_solution(sampled) == 7
-    @test QD.evaluations_per_solution(Sampled(sampled; num_samples=3)) == 21
+    @test QD.evaluations_per_solution(Sampled(sampled; n_samples=3)) == 21
 
     # the average of the evaluations of one generator, in order
     rng = Xoshiro(1)
@@ -79,10 +79,10 @@ end
     @test ev.descriptor isa SVector{2,Float64}
     @test QD.evaluate(Xoshiro(1), sampled, x) == ev
 
-    med = QD.evaluate(Xoshiro(1), Sampled(prob; num_samples=7, expectation=QD.Median()), x)
+    med = QD.evaluate(Xoshiro(1), Sampled(prob; n_samples=7, expectation=QD.Median()), x)
     @test med.fitness == sort([e.fitness for e in singles])[4]
     @test med.descriptor == SVector(sort([e.descriptor[1] for e in singles])[4], sort([e.descriptor[2] for e in singles])[4])
-    even = QD.evaluate(Xoshiro(1), Sampled(prob; num_samples=4, expectation=QD.Median()), x)
+    even = QD.evaluate(Xoshiro(1), Sampled(prob; n_samples=4, expectation=QD.Median()), x)
     s4 = sort([e.fitness for e in singles[1:4]])
     @test even.fitness ≈ (s4[2] + s4[3]) / 2
     @test QD.expectation(QD.Average(), [1.0, 2.0, 6.0]) == 3.0 && QD.expectation(QD.Median(), [5.0]) == 5.0
@@ -90,12 +90,12 @@ end
     # the samples of one solution can mix integer and floating-point values
     mixed = StochasticQDProblem((rng, x) -> rand(rng, Bool) ? (1, (0,)) : (2.5, (0.5,));
                                 init=rng -> [0.0], bounds=((0, 1),))
-    averaged = QD.evaluate(Xoshiro(3), Sampled(mixed; num_samples=8), [0.0])
+    averaged = QD.evaluate(Xoshiro(3), Sampled(mixed; n_samples=8), [0.0])
     @test averaged.fitness isa Float64 && averaged.descriptor isa SVector{1,Float64}
     @test 1 <= averaged.fitness <= 2.5
 
     # the spread shrinks with the square root of the number of samples
-    fitness(p, n) = [QD.evaluate(Xoshiro(s), Sampled(p; num_samples=n), x).fitness for s in 1:300]
+    fitness(p, n) = [QD.evaluate(Xoshiro(s), Sampled(p; n_samples=n), x).fitness for s in 1:300]
     spread(v) = sqrt(sum(abs2, v .- sum(v) / length(v)) / length(v))
     @test spread(fitness(prob, 1)) / spread(fitness(prob, 25)) ≈ 5 rtol = 0.25
 
@@ -105,15 +105,15 @@ end
     @test QD.descriptor_categories(sampled) === nothing
     @test QD.random_solution(Xoshiro(2), sampled) == QD.random_solution(Xoshiro(2), prob)
 
-    @test_throws "num_samples must be at least 1, got 0" Sampled(prob; num_samples=0)
+    @test_throws "n_samples must be at least 1, got 0" Sampled(prob; n_samples=0)
     @test_throws UndefKeywordError Sampled(prob)
-    @test_throws "Sampled needs a stochastic problem, but Rastrigin is deterministic" Sampled(Rastrigin(3); num_samples=2)
+    @test_throws "Sampled needs a stochastic problem, but Rastrigin is deterministic" Sampled(Rastrigin(3); n_samples=2)
     @test_throws "Sampled needs a real fitness, got a Vector{Float64}" QD.evaluate(
         Xoshiro(1), Sampled(StochasticQDProblem((rng, x) -> ([1.0, 2.0], (0.5,)); init=rng -> [0.0], bounds=((0, 1),));
-                            num_samples=2), x)
+                            n_samples=2), x)
     @test_throws "Sampled needs a descriptor that is an SVector of real numbers, got a Tuple" QD.evaluate(
         Xoshiro(1), Sampled(StochasticQDProblem((rng, x) -> (1.0, (1, :a)); init=rng -> [0.0],
-                                                 categories=(1:2, [:a, :b])); num_samples=2), x)
+                                                 categories=(1:2, [:a, :b])); n_samples=2), x)
 end
 
 @testset "runs with stochastic problems" begin
@@ -125,7 +125,7 @@ end
     @test collect(QD.elites(a.archive)) == collect(QD.elites(run(prob).archive))
 
     # every evaluation of the wrapped problem counts against the budget
-    sampled = Sampled(prob; num_samples=5)
+    sampled = Sampled(prob; n_samples=5)
     s = run(sampled)
     @test s.n_evals % 5 == 0 && 2_000 <= s.n_evals < 2_000 + 16 * 5
     @test length(s.history) > 1 && s.history[2].n_evals - s.history[1].n_evals == 16 * 5
@@ -133,7 +133,7 @@ end
 
     # a lucky evaluation inflates the best fitness of a noisy run, and averaging removes most of it
     @test max_fitness(a.archive) > 0 > -1                    # the true best fitness is 0
-    @test max_fitness(run(Sampled(prob; num_samples=50); budget=10_000).archive) < max_fitness(a.archive)
+    @test max_fitness(run(Sampled(prob; n_samples=50); budget=10_000).archive) < max_fitness(a.archive)
 
     # discrete descriptors and other genotypes
     labelled = StochasticQDProblem((rng, x) -> (-sum(abs2, x) + randn(rng), (rand(rng, 1:3), rand(rng, [:chain, :ring])));
@@ -142,7 +142,7 @@ end
     @test r.archive isa CategoricalArchive && length(r.archive) > 3
 
     # the CMA emitters use the same loop
-    cma = solve(prob, CMAME(prob; dims=(6, 6), sigma0=0.5, num_emitters=2, batch_size=8); budget=1_000, rng=Xoshiro(1))
+    cma = solve(prob, CMAME(prob; dims=(6, 6), sigma0=0.5, n_emitters=2, batch_size=8); budget=1_000, rng=Xoshiro(1))
     @test cma.n_evals >= 1_000 && length(cma.archive) > 1
 end
 
@@ -159,7 +159,7 @@ end
                                         s = drawn[i] += 1
                                         return c.fitness[s, i], (c.descriptors[1, s, i], c.descriptors[2, s, i])
                                     end; init=rng -> [1.0], bounds=((0, 1), (0, 1)))
-        evs = [QD.evaluate(Xoshiro(0), Sampled(inner; num_samples=k, expectation=rule), [Float64(i)])
+        evs = [QD.evaluate(Xoshiro(0), Sampled(inner; n_samples=k, expectation=rule), [Float64(i)])
                for i in axes(c.fitness, 2)]
         @test [e.fitness for e in evs] ≈ fitness rtol = 1e-14
         @test reduce(hcat, [collect(e.descriptor) for e in evs]) ≈ descriptor rtol = 1e-14

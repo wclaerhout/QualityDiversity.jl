@@ -341,7 +341,7 @@ end
     QD.update!(textbook, collect(1:8), 0)
     @test textbook.eigen_eval == 0
     prob = Sphere(6)
-    alg = CMAME(prob; dims=(6, 6), sigma0=0.5, num_emitters=2, strategy=QD.PyribsCMAES)
+    alg = CMAME(prob; dims=(6, 6), sigma0=0.5, n_emitters=2, strategy=QD.PyribsCMAES)
     @test alg.emitters[1].es isa QD.CMAES{QD.PyribsCMA}
     @test coverage(solve(prob, alg; budget=1_000, rng=Xoshiro(1)).archive) > 0.1
 end

@@ -119,7 +119,7 @@ end
 @testset "DDS" begin
     prob = QDProblem(x -> (-sum(abs2, x), (x[1]^3, x[2]^3)); init=rng -> 0.1 .* randn(rng, 6),
                      bounds=((-8, 8), (-8, 8)))
-    alg = DDS(prob; dims=(10, 10), sigma0=0.3, bandwidth=0.8, num_emitters=3, batch_size=12, rng=Xoshiro(1))
+    alg = DDS(prob; dims=(10, 10), sigma0=0.3, bandwidth=0.8, n_emitters=3, batch_size=12, rng=Xoshiro(1))
     @test length(alg.archive.buffer) == 10_000
     same(seed) = DDS(prob; dims=(10, 10), sigma0=0.3, bandwidth=0.8, rng=Xoshiro(seed)).archive.rng
     @test alg.archive.rng == same(1) != same(2)     # the archive keeps a copy of rng, moved by the reservoir
@@ -134,7 +134,7 @@ end
     @test collect(QD.elites(again.archive)) == collect(QD.elites(result.archive))
     @test alg.archive.filled == 0                     # init works on a copy
     # it spreads out, while CMA-ME with the same emitters stays near its start
-    cmame = solve(prob, CMAME(prob; dims=(10, 10), sigma0=0.3, num_emitters=3, batch_size=12, outside=ClampOutside());
+    cmame = solve(prob, CMAME(prob; dims=(10, 10), sigma0=0.3, n_emitters=3, batch_size=12, outside=ClampOutside());
                   budget=4_000, rng=Xoshiro(2))
     @test coverage(result.archive) > coverage(cmame.archive)
 

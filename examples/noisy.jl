@@ -82,12 +82,12 @@ judge(plain.archive)
 
 # ## Averaging several evaluations
 #
-# `Sampled` evaluates every solution `num_samples` times and reports the mean
+# `Sampled` evaluates every solution `n_samples` times and reports the mean
 # fitness and the mean descriptor (`expectation=QualityDiversity.Median()` takes the median). Every
 # evaluation counts against the budget, so the run scores ten times fewer
 # solutions.
 
-averaged = Sampled(noisy; num_samples=10)
+averaged = Sampled(noisy; n_samples=10)
 mean_run = solve(averaged, MAPElites(averaged; dims); budget, rng=Xoshiro(1))
 judge(mean_run.archive)
 
@@ -100,12 +100,12 @@ judge(mean_run.archive)
 #
 # Averaging does not stop a solution with an unreliable descriptor from taking a
 # cell. MAP-Elites with low spread (Mace et al., 2023) keeps every descriptor of
-# the `num_samples` evaluations: the spread of a solution is the mean distance
+# the `n_samples` evaluations: the spread of a solution is the mean distance
 # between them, and a solution replaces an elite only if it is fitter and its
 # spread is no larger. `SampledSpread` evaluates the solutions, and `MELS` builds
 # the algorithm around a `SpreadArchive`.
 
-spread_prob = SampledSpread(noisy; num_samples=10)
+spread_prob = SampledSpread(noisy; n_samples=10)
 mels = solve(spread_prob, MELS(spread_prob; dims); budget, rng=Xoshiro(1))
 judge(mels.archive)
 

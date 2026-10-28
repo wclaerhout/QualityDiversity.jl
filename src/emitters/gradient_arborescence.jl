@@ -1,11 +1,11 @@
 """
-    GradientArborescenceEmitter(dim; num_descriptors, sigma0, optimizer=AdamAscent(),
+    GradientArborescenceEmitter(dim; n_descriptors, sigma0, optimizer=AdamAscent(),
                                 batch_size, strategy, ranker, selection, restart, x0,
                                 normalize=true)
-    GradientArborescenceEmitter(x0::AbstractVector; num_descriptors, sigma0, ...)
+    GradientArborescenceEmitter(x0::AbstractVector; n_descriptors, sigma0, ...)
 
 Emitter of CMA-MEGA (Fontaine and Nikolaidis, 2021, "Differentiable Quality Diversity"),
-for solutions that are real vectors of length `dim` and problems with `num_descriptors`
+for solutions that are real vectors of length `dim` and problems with `n_descriptors`
 descriptor dimensions and gradients; see
 [`evaluate_gradient`](@ref QualityDiversity.evaluate_gradient).
 
@@ -25,7 +25,7 @@ the weights of CMA-ES. A round without selected candidates leaves `θ` where it 
 - `optimizer`: how `θ` moves, [`AdamAscent`](@ref) (the default) or
   [`GradientAscent`](@ref).
 - `batch_size`, `strategy`, `ranker`, `selection`, `restart`: as for [`CMAEmitter`](@ref),
-  with the strategy searching the `num_descriptors + 1` coefficients. The defaults are those
+  with the strategy searching the `n_descriptors + 1` coefficients. The defaults are those
   of CMA-ME, as in the paper.
 - `x0`: the first `θ`. Without it, and after every restart, `θ` is a random elite of the
   archive, and the distribution of the coefficients starts again from zero.
@@ -63,7 +63,7 @@ mutable struct GradientArborescenceEmitter{R<:AbstractRanker,S<:SelectionRule,T<
     asked::Bool
 end
 
-function GradientArborescenceEmitter(dim::Integer; num_descriptors::Integer, sigma0::Real,
+function GradientArborescenceEmitter(dim::Integer; n_descriptors::Integer, sigma0::Real,
                                      optimizer::GradientOptimizer=AdamAscent(),
                                      batch_size::Union{Nothing,Integer}=nothing, strategy=CMAES,
                                      ranker::AbstractRanker=TwoStageImprovementRanker(),
@@ -72,9 +72,9 @@ function GradientArborescenceEmitter(dim::Integer; num_descriptors::Integer, sig
                                      x0::Union{Nothing,AbstractVector{<:Real}}=nothing,
                                      normalize::Bool=true)
     dim >= 1 || throw(ArgumentError("dim must be at least 1, got $dim"))
-    num_descriptors >= 1 || throw(ArgumentError("num_descriptors must be at least 1, got $num_descriptors"))
+    n_descriptors >= 1 || throw(ArgumentError("n_descriptors must be at least 1, got $n_descriptors"))
     sizing = batch_size === nothing ? (;) : (; batch_size)
-    es = strategy(num_descriptors + 1; sigma0, sizing..., lower=-Inf, upper=Inf)
+    es = strategy(n_descriptors + 1; sigma0, sizing..., lower=-Inf, upper=Inf)
     es isa AbstractEvolutionStrategy ||
         throw(ArgumentError("strategy must construct an AbstractEvolutionStrategy, got a $(typeof(es))"))
     x0 === nothing || check_start(x0, dim)
@@ -82,7 +82,7 @@ function GradientArborescenceEmitter(dim::Integer; num_descriptors::Integer, sig
     own_ranker = deepcopy(ranker)
     return GradientArborescenceEmitter{typeof(own_ranker),typeof(selection),typeof(restart),typeof(es),typeof(optimizer)}(
         es, optimizer, own_ranker, selection, restart, start, normalize, AscentState(dim),
-        zeros(num_descriptors + 1, dim), 0, 0, false, false, false, false, false)
+        zeros(n_descriptors + 1, dim), 0, 0, false, false, false, false, false)
 end
 
 GradientArborescenceEmitter(x0::AbstractVector{<:Real}; kwargs...) =
