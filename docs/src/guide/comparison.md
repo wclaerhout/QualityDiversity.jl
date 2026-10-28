@@ -61,8 +61,8 @@ core:
   with a grid lookup in place of its centroid search, is 1.2 to 1.35 times slower in
   `float64` and 1.3 to 1.7 times faster in `float32`;
 - CMA-ME is 5 to 7 times faster than pyribs and CMA-MAE 6 times;
-- on a GPU at a batch of 10 000, MAP-Elites with a grid is level with QDax in `float32` and
-  1.35 times slower in `float64`; with a CVT archive QDax is 2.7 times faster in `float32`
+- on a GPU at a batch of 10 000, MAP-Elites with a grid is 1.16 times slower than QDax in `float32`
+  and 1.37 times slower in `float64`; with a CVT archive QDax is 2.7 times faster in `float32`
   and 2.5 times slower in `float64`.
 
 ![MAP-Elites: time against batch size on one CPU core and on a GPU, in float64 and float32](../assets/speed-map-elites.svg)
