@@ -25,6 +25,9 @@ store solutions as arrays of numbers, which makes such genotypes slow or impossi
 
 The package is under development and not yet registered.
 
+QualityDiversity.jl was developed with the help of Claude Code, an AI coding assistant.
+The author directs the design, reviews the code and maintains the package.
+
 ## Installation
 
 ```julia
