@@ -130,6 +130,8 @@ function most_visited_cell!(archive::SpreadArchive, samples::DescriptorSamples)
     for k in 1:n
         cells[k] = cell_index(archive.inner, samples[k])
     end
+    # A loop, not `argmax` and `count` over a view: `cell_index` must not allocate, and
+    # that form allocates on Julia 1.10.
     best = 0
     best_count = 0
     for k in 1:n

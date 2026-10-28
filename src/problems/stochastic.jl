@@ -200,11 +200,7 @@ function most_frequent(values::AbstractVector{T}) where {T}
     for v in values
         counts[v] = get(counts, v, 0) + 1
     end
-    best = first(values)
-    for v in values
-        counts[v] > counts[best] && (best = v)
-    end
-    return best
+    return argmax(v -> counts[v], values)
 end
 
 function expected_descriptor(rule, descriptors::Vector{SVector{N,T}}) where {N,T}

@@ -227,15 +227,8 @@ function reselect!(scheduler::BanditScheduler)
     release!(scheduler, scheduler.pool, 1)
     total = sum(scheduler.selections)
     for _ in count(scheduler.active)+1:scheduler.num_active
-        best = 0
-        best_score = -Inf
-        for i in eachindex(scheduler.active)
-            scheduler.active[i] && continue
-            score = ucb1(scheduler.successes[i], scheduler.selections[i], total, scheduler.zeta)
-            if best == 0 || score > best_score
-                best, best_score = i, score
-            end
-        end
+        best = argmax(i -> ucb1(scheduler.successes[i], scheduler.selections[i], total, scheduler.zeta),
+                      findall(!, scheduler.active))
         scheduler.active[best] = true
     end
     return nothing

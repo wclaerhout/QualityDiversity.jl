@@ -145,14 +145,10 @@ function cqd_score(archive::AbstractArchive{G,F,SVector{N,Float64}}; targets::Ab
     distance = similar(fitness)
     for target in points
         for e in eachindex(descriptors, distance)
-            distance[e] = sqrt(sum(abs2, descriptors[e] - target)) / dmax
+            distance[e] = norm(descriptors[e] - target) / dmax
         end
         for (j, θ) in pairs(weights)
-            best = -Inf
-            for e in eachindex(fitness, distance)
-                best = max(best, fitness[e] - θ * distance[e])
-            end
-            totals[j] += best
+            totals[j] += maximum(e -> fitness[e] - θ * distance[e], eachindex(fitness, distance))
         end
     end
     return CQDScore(sum(totals), weights, totals ./ length(points), length(points))
@@ -185,7 +181,7 @@ end
 
 function bounds_diagonal(archive)
     box = archive_bounds(archive, "pass distance_max")
-    return sqrt(sum(b -> (Float64(b[2]) - Float64(b[1]))^2, box))
+    return norm(map(b -> Float64(b[2]) - Float64(b[1]), box))
 end
 
 function penalty_weights(penalties::Integer)

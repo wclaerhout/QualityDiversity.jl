@@ -201,24 +201,12 @@ function sliding_cell(archive::SlidingBoundariesArchive{G,F,N}, outside, d::Abst
             x = resolve_outside(outside, i, x, lo, hi)
             isnan(x) && return 0
         end
-        index += (last_cell_at_or_below(b, n, x) - 1) * stride
+        # the last cell whose lower boundary is at most `x`; the upper boundary `b[n+1]`
+        # belongs to cell `n`
+        index += (min(searchsortedlast(b, x), n) - 1) * stride
         stride *= n
     end
     return index + 1
-end
-
-# The largest `j` in `1:n` with `b[j] <= x`, for a nondecreasing `b` with `b[1] <= x`.
-function last_cell_at_or_below(b, n, x)
-    lo, hi = 1, n
-    while lo < hi
-        mid = (lo + hi + 1) >>> 1
-        if b[mid] <= x
-            lo = mid
-        else
-            hi = mid - 1
-        end
-    end
-    return lo
 end
 
 function add!(archive::SlidingBoundariesArchive{G,F,N,O,P}, x, ev::Evaluation{<:Real}) where {G,F,N,O,P}
