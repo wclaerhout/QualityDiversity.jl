@@ -56,7 +56,7 @@ class ScriptedNormal:
         return loc + scale * Z
 
 
-archive = GridArchive(solution_dim=n, dims=[5, 5], ranges=[(-1, 1), (-1, 1)])
+archive = GridArchive(solution_dim=n, dims=[5, 5], ranges=[(-1, 1), (-1, 1)], seed=5)
 archive.add(population, F, D)
 emitter = GradientOperatorEmitter(archive, sigma=0.0, sigma_g=0.7, measure_gradients=True,
                                   normalize_grad=True, batch_size=batch, seed=3, x0=np.zeros(n))

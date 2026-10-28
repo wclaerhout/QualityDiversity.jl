@@ -2,8 +2,8 @@
 # front is full more often than not, after a sequence of insertions. MOME-PGX removes the
 # solution with the smallest crowding distance from a full front, as ReplaceCrowded does.
 # `python3 generate_crowding.py <MOME_PGX>` rewrites `crowding.jl` next to it, with
-# <MOME_PGX> a clone of github.com/adaptive-intelligent-robotics/MOME_PGX (commit 58c34b7);
-# needs jax, flax, chex and scikit-learn. The repository was written for jax 0.3, so two
+# <MOME_PGX> a clone of github.com/adaptive-intelligent-robotics/MOME_PGX (commit 58c34b7),
+# with the packages of requirements.txt. The repository was written for jax 0.3, so two
 # names that later versions removed are restored first, with their old meaning.
 import sys
 import numpy as np

@@ -1,5 +1,5 @@
 # Reference values for test_variation.jl. `python3 generate_variation.py` rewrites
-# `variation.jl` next to it. Needs pymoo, ribs 0.12.0 and qdax 0.5.0.
+# `variation.jl` next to it. Needs pymoo 0.6.2, ribs 0.12.0 and qdax 0.5.0.
 #
 # Polynomial mutation: pymoo's mut_pm, the form of Deb's operator in NSGA-II, run on fixed
 # parents with its uniform draws scripted, so the children are exact. QDax's

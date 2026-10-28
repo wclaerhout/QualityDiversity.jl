@@ -1,6 +1,6 @@
 # Reference values for test_spread.jl: the elites that QDax's MELSRepertoire keeps after a
 # sequence of solutions, each evaluated several times, is added one solution at a time.
-# `python3 generate_spread.py` rewrites `spread.jl` next to it. Needs qdax.
+# `python3 generate_spread.py` rewrites `spread.jl` next to it. Needs qdax 0.5.0.
 #
 # Every solution has a single most visited cell: QDax breaks a tie by the lowest cell index
 # and SpreadArchive by the cell visited first. The cells are those of the nearest centroid,

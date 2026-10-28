@@ -6,7 +6,7 @@ CurrentModule = QualityDiversity
 
 This page lists, for every component, how it is checked against code written by others:
 [pyribs](https://pyribs.org) 0.12.0, [QDax](https://github.com/adaptive-intelligent-robotics/QDax)
-0.5.0, [pymoo](https://pymoo.org), [MOME-PGX](https://github.com/adaptive-intelligent-robotics/MOME_PGX),
+0.5.0, [pymoo](https://pymoo.org) 0.6.2, [MOME-PGX](https://github.com/adaptive-intelligent-robotics/MOME_PGX),
 or the equations of the paper. Where the result differs, the table says why. Items that
 need more work link to an issue.
 
@@ -16,7 +16,7 @@ The table names the strongest check that passes.
 
 | Method | What is compared |
 |---|---|
-| **Reference** | The same scripted inputs go through the other library and through this package, and the outputs agree exactly or to rounding: statuses, improvements, kept solutions, cells, metrics, children. A Python script in [`test/reference`](https://github.com/wclaerhout/QualityDiversity.jl/tree/main/test/reference) writes the other library's outputs, and a test compares them on every run of the test suite. |
+| **Reference** | The same scripted inputs go through the other library and through this package, and the outputs agree exactly or to rounding: statuses, improvements, kept solutions, cells, metrics, children. A Python script in [`test/reference`](https://github.com/wclaerhout/QualityDiversity.jl/tree/main/test/reference) writes the other library's outputs, with the versions in its `requirements.txt` and the header of the script, and a test compares them on every run of the test suite. |
 | **Paper** | The update equations of the paper, written independently in NumPy (`test/reference/generate_strategies.py`), run on fixed inputs. Used where a library departs from the paper. |
 | **Distribution** | For an operator that draws random numbers, which no two libraries draw alike: the mean, standard deviation, quantiles and correlation of 200 000 children of fixed parents. |
 | **Whole run** | A full run in two libraries with the same settings, in [`benchmark/compare`](https://github.com/wclaerhout/QualityDiversity.jl/tree/main/benchmark/compare); coverage and QD score agree within the spread between seeds. This catches gross errors, not small ones. |

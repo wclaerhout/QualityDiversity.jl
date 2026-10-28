@@ -1,0 +1,6 @@
+# The Python packages that the generate_*.py scripts in this directory run with:
+#   python -m venv venv && venv/bin/pip install -r test/reference/requirements.txt
+# generate_dns.py needs QDax at a later commit instead of qdax 0.5.0, and
+# generate_crowding.py a clone of MOME-PGX; their headers say how.
+-r ../../benchmark/compare/requirements.txt
+pymoo==0.6.2
