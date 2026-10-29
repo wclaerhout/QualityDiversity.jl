@@ -42,8 +42,8 @@ jobs:
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
-      # coverage from the Linux jobs only; the upload is tokenless on a public
-      # repository, a CODECOV_TOKEN secret only removes rate limits
+      # coverage from the Linux jobs only; Codecov takes an upload to a public repository
+      # only with the CODECOV_TOKEN secret, except from a pull request from a fork
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.os == 'ubuntu-latest'
       - uses: codecov/codecov-action@v5
