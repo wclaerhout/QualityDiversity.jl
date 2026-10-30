@@ -97,6 +97,8 @@ prob = Sphere(20)
 - [A custom genotype](tutorials/graphs.md) evolves graphs.
 - [Colour pairs and emotions](tutorials/colours.md), an extra example, evolves pairs of colours
   from calm to arousing and from sad to happy.
+- [Strange attractors](tutorials/attractors.md), an extra example, evolves quadratic maps of
+  the plane into strange attractors, from thin curves to dense folds.
 - [Concepts](guide/concepts.md) explains the parts of the package and how a run proceeds.
 - [Choosing an algorithm](guide/algorithms.md) compares the algorithms and archives.
 - [Coming from pyribs or QDax](guide/comparison.md) maps their names to this package.
