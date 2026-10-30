@@ -17,7 +17,7 @@ const GENERATED = joinpath(@__DIR__, "src", "tutorials")
 # The tutorials are the scripts in examples/, turned into pages by Literate, so the code
 # in the documentation is the code that runs.
 const TUTORIALS = ["rastrigin_tutorial.jl", "graphs.jl", "noisy.jl", "mome.jl", "heatmap.jl"]
-const EXTRA_EXAMPLES = ["colours.jl", "attractors.jl"]
+const EXTRA_EXAMPLES = ["colours.jl", "attractors.jl", "maze.jl"]
 
 rm(GENERATED; force=true, recursive=true)
 for file in [TUTORIALS; EXTRA_EXAMPLES]

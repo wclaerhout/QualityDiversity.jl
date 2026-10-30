@@ -99,6 +99,8 @@ prob = Sphere(20)
   from calm to arousing and from sad to happy.
 - [Strange attractors](tutorials/attractors.md), an extra example, evolves quadratic maps of
   the plane into strange attractors, from thin curves to dense folds.
+- [A deceptive maze](tutorials/maze.md), an extra example, evolves the neural controller of a
+  robot that must drive away from its target to reach it.
 - [Concepts](guide/concepts.md) explains the parts of the package and how a run proceeds.
 - [Choosing an algorithm](guide/algorithms.md) compares the algorithms and archives.
 - [Coming from pyribs or QDax](guide/comparison.md) maps their names to this package.
