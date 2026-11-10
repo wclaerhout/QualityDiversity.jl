@@ -1,7 +1,7 @@
 name = "QualityDiversity"
 uuid = "5f1c2a3e-8b47-4d0e-9a6c-2e7d1b94c0a3"
-authors = ["Ward Claerhout <ward.claerhoutt2002@gmail.com>"]
 version = "0.1.0-DEV"
+authors = ["Ward Claerhout <ward.claerhoutt2002@gmail.com>"]
 
 [deps]
 CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
@@ -29,7 +29,7 @@ Atomix = "1"
 CommonSolve = "0.2"
 Compat = "4.10"
 ForwardDiff = "0.10, 1"
-KernelAbstractions = "0.9"
+KernelAbstractions = "0.9, 0.10"
 LinearAlgebra = "1"
 Makie = "0.24"
 Random = "1"
