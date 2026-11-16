@@ -34,8 +34,10 @@ jobs:
             os: ubuntu-latest
             jet: '1'
           # the oldest version of every dependency that [compat] allows, on the oldest
-          # Julia that it allows, so that the lower bounds are tested
-          - version: 'min'
+          # minor version of Julia that it allows, so that the lower bounds are tested;
+          # the latest patch release, since Julia 1.10.0 does not start on current
+          # Linux runners (its libopenlibm requests an executable stack)
+          - version: '1.10'
             threads: 1
             os: ubuntu-latest
             downgrade: true
