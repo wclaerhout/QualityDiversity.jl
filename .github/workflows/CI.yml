@@ -8,8 +8,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    name: Julia ${{ matrix.version }}, ${{ matrix.threads }} thread(s), ${{ matrix.os }}
+    name: Julia ${{ matrix.version }}, ${{ matrix.threads }} thread(s), ${{ matrix.os }}${{ matrix.downgrade && ', oldest dependencies' || '' }}
     runs-on: ${{ matrix.os }}
+    # a failure on a prerelease of Julia does not fail the run
+    continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +33,16 @@ jobs:
             threads: 1
             os: ubuntu-latest
             jet: '1'
+          # the oldest version of every dependency that [compat] allows, on the oldest
+          # Julia that it allows, so that the lower bounds are tested
+          - version: 'min'
+            threads: 1
+            os: ubuntu-latest
+            downgrade: true
+          # the next Julia: the latest alpha, beta or release candidate
+          - version: 'pre'
+            threads: 1
+            os: ubuntu-latest
     env:
       JULIA_NUM_THREADS: ${{ matrix.threads }}
       QD_JET: ${{ matrix.jet }}
@@ -40,8 +52,17 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
+      # resolves the package and test/ together, weak dependencies included, and writes
+      # the manifests that the tests then use unchanged
+      - uses: julia-actions/julia-downgrade-compat@v2
+        if: matrix.downgrade
+        with:
+          projects: '.,test'
+          julia_version: 'min'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        with:
+          allow_reresolve: ${{ !matrix.downgrade }}
       # coverage from the Linux jobs only; Codecov takes an upload to a public repository
       # only with the CODECOV_TOKEN secret, except from a pull request from a fork
       - uses: julia-actions/julia-processcoverage@v1
