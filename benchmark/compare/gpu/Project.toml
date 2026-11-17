@@ -9,3 +9,4 @@ QualityDiversity = {path = "../../.."}
 
 [compat]
 CUDA = "5, 6"
+Statistics = "1"
