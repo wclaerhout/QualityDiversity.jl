@@ -9,3 +9,4 @@ QualityDiversity = {path = ".."}
 
 [compat]
 BenchmarkTools = "1"
+StaticArrays = "1"
